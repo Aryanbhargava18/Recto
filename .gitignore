@@ -7,3 +7,14 @@ jd_cache.json
 rerank_cache.json
 jd_signals.json
 .DS_Store
+
+# Scratch / debug scripts
+trace.py
+check_missing.py
+validate_*.py
+
+# Scratch outputs
+top100.csv
+top100.md
+scored_candidates.pkl
+candidates.jsonl
