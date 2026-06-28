@@ -48,28 +48,66 @@ FILTER_CONFIG = {
 }
 
 def load_data(config):
-    """
-    1. Loads the dataset from 'candidates.json' (with a fallback to CSV).
-    Returns a pandas DataFrame.
-    """
     json_path = config['input_json']
     csv_path = config['input_csv']
     
     if os.path.exists(json_path):
         print(f"Loading data from JSON: {json_path}")
         try:
-            # Assuming JSON could be a list of dicts or records format
             df = pd.read_json(json_path)
         except ValueError:
-            # Fallback for JSON lines format
             df = pd.read_json(json_path, lines=True)
     elif os.path.exists(csv_path):
         print(f"Loading data from CSV fallback: {csv_path}")
         df = pd.read_csv(csv_path)
     else:
-        # For the sake of having a runnable script without the files, 
-        # let's raise an error but also explain how to proceed.
         raise FileNotFoundError(f"Could not find {json_path} or {csv_path}. Please ensure the dataset exists.")
+        
+    # FLATTEN RAW DATASET SCHEMA
+    if 'profile' in df.columns:
+        print("Flattening raw nested dataset schema...")
+        import datetime
+        
+        df['name'] = df['profile'].apply(lambda x: x.get('anonymized_name', '') if isinstance(x, dict) else '')
+        df['title'] = df['profile'].apply(lambda x: x.get('current_title', '') if isinstance(x, dict) else '')
+        df['country'] = df['profile'].apply(lambda x: x.get('country', '') if isinstance(x, dict) else '')
+        df['duration_months'] = df['profile'].apply(lambda x: int(x.get('years_of_experience', 0)*12) if isinstance(x, dict) else 0)
+        
+        def extract_career(history):
+            if not isinstance(history, list): return ''
+            return ' '.join([item.get('description', '') for item in history if isinstance(item, dict)])
+        df['career_description'] = df.get('career_history', pd.Series([])).apply(extract_career)
+        
+        def extract_skills(skills):
+            if not isinstance(skills, list): return []
+            return [item.get('name', '') for item in skills if isinstance(item, dict)]
+        df['skills'] = df.get('skills', pd.Series([])).apply(extract_skills)
+        
+        if 'redrob_signals' in df.columns:
+            def safe_get(d, key, default=None):
+                return d.get(key, default) if isinstance(d, dict) else default
+                
+            df['salary_min'] = df['redrob_signals'].apply(lambda x: safe_get(safe_get(x, 'expected_salary_range_inr_lpa', {}), 'min', 0))
+            df['salary_max'] = df['redrob_signals'].apply(lambda x: safe_get(safe_get(x, 'expected_salary_range_inr_lpa', {}), 'max', 0))
+            df['willing_to_relocate'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'willing_to_relocate', False))
+            df['onsite_preference'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'preferred_work_mode', 'flexible'))
+            df['open_to_work'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'open_to_work_flag', False))
+            df['response_rate'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'recruiter_response_rate', 0.0))
+            df['notice_period_days'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'notice_period_days', 30))
+            df['github_stars'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'github_activity_score', 0))
+            df['search_appearance'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'search_appearance_30d', 0))
+            df['recruiter_saves'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'saved_by_recruiters_30d', 0))
+            df['assessment_scores'] = df['redrob_signals'].apply(lambda x: safe_get(x, 'skill_assessment_scores', {}))
+            
+            def calc_active_days(x):
+                date_str = safe_get(x, 'last_active_date')
+                if not date_str: return 999
+                try:
+                    dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                    return (datetime.datetime(2026, 6, 1) - dt).days
+                except:
+                    return 999
+            df['active_days_since_last_login'] = df['redrob_signals'].apply(calc_active_days)
     
     return df
 
