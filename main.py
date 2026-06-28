@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--candidates", type=str, required=True, help="Path to candidates json/csv")
     parser.add_argument("--output", type=str, default="results", help="Output directory")
     parser.add_argument("--skip-rerank", action="store_true", help="Skip the LLM semantic reranking phase")
+    parser.add_argument("--sensitivity", action="store_true", help="Run sensitivity analysis and exit")
     args = parser.parse_args()
 
     # Ensure environment variables are loaded so jd_parser and reranker have the API key
@@ -59,6 +60,11 @@ def main():
         parsed_jd = jd_parser.parse_jd(jd_text)
         progress.update(task2, description=f"[green]✔ Step 2: JD Parsed ({time.time()-t0:.2f}s) | Extracted required skills.[/green]")
         
+        if args.sensitivity:
+            progress.stop()
+            run_sensitivity_analysis(filtered_df)
+            return
+
         # Step 3: Score
         task3 = progress.add_task("[cyan]Step 3: Rule-based Scoring...", total=None)
         t0 = time.time()
@@ -109,6 +115,30 @@ def main():
         progress.update(task5, description=f"[green]✔ Step 5: Reports Generated ({time.time()-t0:.2f}s)[/green]")
         
     console.print(f"\n[bold green]🎉 Pipeline Complete! Check the [underline]{args.output}/[/underline] folder for shortlist_top10.csv and recto_report.md[/bold green]")
+
+def run_sensitivity_analysis(df_filtered):
+    console.print("\n[bold yellow]Running Sensitivity Analysis...[/bold yellow]")
+    results = {}
+    
+    configs = {
+        'baseline': {'ultra_rare_weight': 20, 'services_penalty': -20, 'cv_penalty': -8},
+        'rare_heavy': {'ultra_rare_weight': 30, 'services_penalty': -20, 'cv_penalty': -8},
+        'rare_light': {'ultra_rare_weight': 12, 'services_penalty': -20, 'cv_penalty': -8},
+        'lenient_services': {'ultra_rare_weight': 20, 'services_penalty': -10, 'cv_penalty': -8},
+    }
+    
+    baseline_top10 = None
+    for config_name, weights in configs.items():
+        top10_ids = scorer.score_candidates(df_filtered.copy(), weights).head(10)['candidate_id'].tolist()
+        results[config_name] = top10_ids
+        if config_name == 'baseline':
+            baseline_top10 = set(top10_ids)
+    
+    print("\nSensitivity Analysis:")
+    print(f"{'Config':<20} {'Overlap with baseline top-10'}")
+    for name, ids in results.items():
+        overlap = len(set(ids) & baseline_top10)
+        print(f"{name:<20} {overlap}/10 candidates in common")
 
 if __name__ == "__main__":
     main()

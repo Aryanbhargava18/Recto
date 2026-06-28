@@ -5,11 +5,25 @@ import pickle
 import pandas as pd
 import google.generativeai as genai
 from dotenv import load_dotenv
+import scorer
 
 CACHE_FILE = 'rerank_cache.json'
 MAX_RETRIES = 4
 BACKOFF_TIMES = [4, 8, 16, 32]
 BATCH_SIZE = 5
+
+BOUNDARY_PROMPT = """
+You are making one critical hiring decision.
+
+Candidate A (currently rank {rank_a}):
+{profile_a}
+
+Candidate B (currently rank {rank_b}):
+{profile_b}
+
+For a Senior AI Engineer role building hybrid search + embeddings + ranking systems at a product company:
+Return ONLY raw JSON, no markdown, exactly this format: {{"winner": "A", "confidence": "high", "deciding_factor": "..."}}
+"""
 
 def load_rerank_cache():
     if os.path.exists(CACHE_FILE):
@@ -25,38 +39,26 @@ def save_rerank_cache(cache):
         json.dump(cache, f, indent=2)
 
 def get_jd_summary():
-    """Loads the JD summary from jd_cache.json."""
     if not os.path.exists('jd_cache.json'):
-        print("Warning: jd_cache.json not found. Using generic fallback JD.")
         return "Information Retrieval Engineer. Requires Search, NLP, and relevance tuning."
-    
     with open('jd_cache.json', 'r', encoding='utf-8') as f:
         try:
             cache = json.load(f)
-            if not cache:
-                return "Information Retrieval Engineer. Requires Search, NLP, and relevance tuning."
-            
-            # Since jd_cache is keyed by hash, we'll grab the first one assuming 1 active JD
+            if not cache: return "Information Retrieval Engineer. Requires Search, NLP, and relevance tuning."
             first_key = list(cache.keys())[0]
-            jd_data = cache[first_key]
-            return json.dumps(jd_data, indent=2)
-        except Exception as e:
-            print(f"Error loading JD cache: {e}")
+            return json.dumps(cache[first_key], indent=2)
+        except Exception:
             return "Information Retrieval Engineer. Requires Search, NLP, and relevance tuning."
 
 def construct_candidates_text(candidates):
-    """Formats the candidate data for the LLM prompt."""
     text_blocks = []
     for cand in candidates:
         cid = str(cand['candidate_id'])
         desc = str(cand.get('career_description', ''))[:500]
         roles_count = cand.get('ir_roles_count', 0)
         rare = cand.get('rare_skills', [])
-        
-        # safely extract assessment scores
         scores_raw = cand.get('assessment_scores', {})
         if isinstance(scores_raw, dict):
-            # Sort by highest scores
             sorted_scores = dict(sorted(scores_raw.items(), key=lambda item: item[1], reverse=True)[:3])
         else:
             sorted_scores = {}
@@ -69,19 +71,10 @@ def construct_candidates_text(candidates):
             f"Top Assessment Scores: {sorted_scores}\n"
         )
         text_blocks.append(block)
-    
     return "\n---\n".join(text_blocks)
 
 def evaluate_batch(model, candidates, jd_summary, cache):
-    """Sends a batch of candidates to the LLM and parses the JSON response."""
-    if not candidates:
-        return []
-        
-    system_instruction = (
-        "You are an expert technical recruiter evaluating candidates for an Information Retrieval / Search engineering role. "
-        "You understand the difference between genuine IR expertise and keyword stuffing. Score fairly."
-    )
-    
+    if not candidates: return []
     candidates_text = construct_candidates_text(candidates)
     
     user_prompt = f"""Job Requirements Summary: {jd_summary}
@@ -100,46 +93,85 @@ Evaluate these {len(candidates)} candidates and return ONLY a JSON array, no mar
 Candidates:
 {candidates_text}
 """
-    
     for attempt in range(MAX_RETRIES + 1):
         try:
-            # We override the model's system prompt for this specific task
-            response = model.generate_content(
-                user_prompt,
-                # system_instruction doesn't directly override on generate_content in some API versions,
-                # but we instantiated the model with it earlier if possible, or pass it as first part.
-                # Since the prompt requires the exact SYSTEM string, we let the model object handle it.
-            )
+            response = model.generate_content(user_prompt)
             result_text = response.text.strip()
             
-            # Defensive clean up
             if result_text.startswith("```json"): result_text = result_text[7:]
             if result_text.startswith("```"): result_text = result_text[3:]
             if result_text.endswith("```"): result_text = result_text[:-3]
             
             parsed_array = json.loads(result_text.strip())
             
-            # Cache the results
             for item in parsed_array:
                 cid = str(item.get('candidate_id'))
                 cache[cid] = item
-            
             return parsed_array
-            
         except Exception as e:
-            error_msg = str(e)
-            if "429" in error_msg or "Quota" in error_msg or "Too Many Requests" in error_msg:
+            if "429" in str(e) or "Quota" in str(e):
                 if attempt < MAX_RETRIES:
-                    wait_time = BACKOFF_TIMES[attempt]
-                    print(f"Rate limit hit. Retrying in {wait_time}s... (Attempt {attempt+1}/{MAX_RETRIES})")
-                    time.sleep(wait_time)
+                    time.sleep(BACKOFF_TIMES[attempt])
                 else:
-                    print("Max retries reached for batch. Returning empty.")
                     return []
             else:
-                print(f"API/Parsing error: {e}\nRaw output: {result_text if 'result_text' in locals() else 'None'}")
                 return []
     return []
+
+def call_gemini_pairwise(model, cand_a, cand_b, cache):
+    cid_a = str(cand_a['candidate_id'])
+    cid_b = str(cand_b['candidate_id'])
+    pair_key = f"pair_{cid_a}_{cid_b}"
+    if pair_key in cache: return cache[pair_key]
+
+    prompt = BOUNDARY_PROMPT.format(
+        rank_a=cand_a['rank'], profile_a=str(cand_a.get('career_description', ''))[:300],
+        rank_b=cand_b['rank'], profile_b=str(cand_b.get('career_description', ''))[:300]
+    )
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            response = model.generate_content(prompt)
+            txt = response.text.strip()
+            if txt.startswith("```json"): txt = txt[7:]
+            if txt.startswith("```"): txt = txt[3:]
+            if txt.endswith("```"): txt = txt[:-3]
+            
+            result = json.loads(txt.strip())
+            cache[pair_key] = result
+            save_rerank_cache(cache)
+            return result
+        except Exception as e:
+            if "429" in str(e) or "Quota" in str(e):
+                if attempt < MAX_RETRIES:
+                    time.sleep(BACKOFF_TIMES[attempt])
+                else: return {'winner': 'A', 'confidence': 'low'}
+            else: return {'winner': 'A', 'confidence': 'low'}
+    return {'winner': 'A', 'confidence': 'low'}
+
+def boundary_calibration(model, df_ranked, cache):
+    if len(df_ranked) < 14:
+        return df_ranked
+        
+    boundary_zone = df_ranked.iloc[7:14].copy()
+    swaps = []
+    for i in range(len(boundary_zone) - 1):
+        cand_a = boundary_zone.iloc[i]
+        cand_b = boundary_zone.iloc[i+1]
+        
+        if abs(cand_a['HYBRID_SCORE'] - cand_b['HYBRID_SCORE']) < 5:
+            result = call_gemini_pairwise(model, cand_a, cand_b, cache)
+            if result.get('winner') == 'B' and result.get('confidence') == 'high':
+                swaps.append((i, i+1))
+                
+    for idx_a, idx_b in swaps:
+        row_a = boundary_zone.iloc[idx_a].copy()
+        row_b = boundary_zone.iloc[idx_b].copy()
+        boundary_zone.iloc[idx_a] = row_b
+        boundary_zone.iloc[idx_b] = row_a
+        
+    df_ranked.iloc[7:14] = boundary_zone.values
+    return df_ranked
 
 def main():
     load_dotenv()
@@ -149,115 +181,62 @@ def main():
         return
         
     genai.configure(api_key=api_key)
-    
-    system_instruction = (
-        "You are an expert technical recruiter evaluating candidates for an Information Retrieval / Search engineering role. "
-        "You understand the difference between genuine IR expertise and keyword stuffing. Score fairly."
-    )
-    
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=system_instruction,
-        generation_config={"response_mime_type": "application/json"}
-    )
+    system_instruction = "You are an expert technical recruiter evaluating candidates for an Information Retrieval / Search engineering role."
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash", system_instruction=system_instruction, generation_config={"response_mime_type": "application/json"})
     
     if not os.path.exists('top200_candidates.pkl'):
-        print("Error: top200_candidates.pkl not found. Run scorer.py first.")
         return
-        
     with open('top200_candidates.pkl', 'rb') as f:
         df = pickle.load(f)
     
     jd_summary = get_jd_summary()
     cache = load_rerank_cache()
     
-    print(f"Loaded {len(df)} candidates to rerank.")
-    
-    # 1. Separate cached vs uncached candidates
+    # 1. Evaluate un-cached candidates
     uncached_candidates = []
     results = []
-    
     for _, row in df.iterrows():
         cid = str(row['candidate_id'])
-        if cid in cache:
-            results.append(cache[cid])
-        else:
-            uncached_candidates.append(row.to_dict())
+        if cid in cache: results.append(cache[cid])
+        else: uncached_candidates.append(row.to_dict())
             
-    print(f"Found {len(results)} in cache. {len(uncached_candidates)} need LLM evaluation.")
-    
-    # 2. Process uncached in batches of 5
-    api_calls_used = 0
-    total_processed = len(results)
-    
-    if uncached_candidates:
-        print(f"Processing in {len(uncached_candidates) // BATCH_SIZE + (1 if len(uncached_candidates) % BATCH_SIZE != 0 else 0)} batches...")
-        
     for i in range(0, len(uncached_candidates), BATCH_SIZE):
         batch = uncached_candidates[i:i+BATCH_SIZE]
-        
-        batch_results = evaluate_batch(model, batch, jd_summary, cache)
-        results.extend(batch_results)
-        
-        # Save cache progressively
+        results.extend(evaluate_batch(model, batch, jd_summary, cache))
         save_rerank_cache(cache)
-        
-        api_calls_used += 1
-        total_processed += len(batch)
-        
-        # Print progress
-        if total_processed % 10 == 0 or total_processed == len(df):
-            print(f"Progress: {total_processed}/{len(df)} candidates evaluated.")
+        if i + BATCH_SIZE < len(uncached_candidates): time.sleep(5)
             
-        # Enforce sleep to stay under 15 RPM constraints (5 seconds between batches)
-        if i + BATCH_SIZE < len(uncached_candidates):
-            time.sleep(5)
-            
-    print(f"\nCompleted reranking! Total API calls made this run: {api_calls_used}")
-    
-    # 3. Merge semantic results back into DataFrame
+    # 2. Merge & calculate HYBRID_SCORE
     semantic_df = pd.DataFrame(results)
-    
-    # Ensure IDs match types for merging
-    semantic_df['candidate_id'] = semantic_df['candidate_id'].astype(str)
+    if not semantic_df.empty:
+        semantic_df['candidate_id'] = semantic_df['candidate_id'].astype(str)
     df['candidate_id'] = df['candidate_id'].astype(str)
-    
-    # Rename 'final_score' from phase 1 to 'rule_score' for clarity
     df = df.rename(columns={'final_score': 'rule_score'})
-    
     merged_df = pd.merge(df, semantic_df, on='candidate_id', how='left')
     
-    # Handle any potential missing semantic scores if an API call failed completely
-    merged_df['semantic_score'] = merged_df['semantic_score'].fillna(0).astype(float)
+    merged_df['semantic_score'] = merged_df.get('semantic_score', pd.Series(0)).fillna(0).astype(float)
+    merged_df['genuine_practitioner'] = merged_df.get('genuine_ir_depth', pd.Series(False)).fillna(False).astype(bool)
     
-    # 4. Compute Hybrid Score
     merged_df['HYBRID_SCORE'] = (merged_df['rule_score'] * 0.6) + (merged_df['semantic_score'] * 0.4)
-    
-    # 5. Re-sort and Rank
     merged_df = merged_df.sort_values(by='HYBRID_SCORE', ascending=False).reset_index(drop=True)
     merged_df['rank'] = merged_df.index + 1
     
-    # 6. Save final outputs
+    # 3. Pairwise boundary calibration
+    print("Running Pairwise Boundary Calibration on ranks 8-14...")
+    merged_df = boundary_calibration(model, merged_df, cache)
+    
+    # 4. NDCG Optimal Sort
+    print("Applying NDCG-Optimal Sort...")
+    merged_df = scorer.ndcg_optimal_sort(merged_df)
+    
+    merged_df['rank'] = merged_df.index + 1
     merged_df.to_pickle('final_ranked.pkl')
-    print("Saved 'final_ranked.pkl'")
     
-    csv_cols = [
-        'rank', 'candidate_id', 'name', 'HYBRID_SCORE', 
-        'rule_score', 'semantic_score', 'recruiter_summary', 'key_strengths'
-    ]
-    
-    # Rename 'name' to 'candidate_name' in CSV if requested (user asked for 'candidate_name')
+    csv_cols = ['rank', 'candidate_id', 'name', 'HYBRID_SCORE', 'rule_score', 'semantic_score', 'recruiter_summary', 'key_strengths', 'ultra_rare_hit_count', 'genuine_practitioner', 'wrong_domain']
     csv_df = merged_df.rename(columns={'name': 'candidate_name'})
     csv_cols = [c if c != 'name' else 'candidate_name' for c in csv_cols]
-    
-    # Keep only available columns
     csv_cols = [c for c in csv_cols if c in csv_df.columns]
-    
     csv_df[csv_cols].to_csv('final_ranking.csv', index=False)
-    print("Saved 'final_ranking.csv'")
     
-    print("\n=== TOP 5 FINAL RANKED CANDIDATES ===")
-    print(csv_df[['rank', 'candidate_id', 'candidate_name', 'HYBRID_SCORE', 'rule_score', 'semantic_score']].head(5).to_string(index=False))
-
 if __name__ == "__main__":
     main()

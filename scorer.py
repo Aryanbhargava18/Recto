@@ -5,109 +5,85 @@ import pickle
 import os
 import time
 
+ULTRA_RARE_TERMS = ['bm25', 'ndcg', 'mrr', 'embedding', 'bi-encoder', 'cross-encoder', 'dense retrieval', 'sparse retrieval', 'hybrid retrieval', 'reranking', 'colbert', 'dpr', 'splade', 'hnsw', 'ann index', 'vector search', 'recall@k', 'precision@k']
+HIGH_VALUE_TERMS = ['elasticsearch', 'solr', 'lucene', 'opensearch', 'faiss', 'pinecone', 'milvus', 'weaviate', 'qdrant', 'chroma']
+
+PRODUCT_SIGNALS = ['founding', 'lead', 'staff', 'principal', 'head of', 'architect']
+GROWTH_TITLES = ['engineer', 'scientist', 'researcher', 'developer']
+STAGNANT_SIGNALS = ['analyst', 'consultant', 'associate', 'executive', 'specialist']
+
 def load_data(filepath='filtered_candidates.pkl'):
-    """
-    Loads the filtered dataset. If not found, generates a dummy dataset 
-    to demonstrate the exact logic running fast.
-    """
     if not os.path.exists(filepath):
-        print(f"Warning: {filepath} not found. Generating dummy dataset for testing...")
-        return generate_dummy_data()
-    
+        print(f"Error: {filepath} not found.")
+        return pd.DataFrame()
     with open(filepath, 'rb') as f:
         return pickle.load(f)
 
-def generate_dummy_data(n=100_000):
-    """Generates 100k rows to test performance."""
-    np.random.seed(42)
-    df = pd.DataFrame({
-        'candidate_id': range(1, n+1),
-        'name': [f"Candidate_{i}" for i in range(1, n+1)],
-        'career_description': np.random.choice([
-            "I use BGE and FAISS for dense retrieval and reranker models.",
-            "Worked on YOLO and CNN for image classification. OpenCV expert.",
-            "Information retrieval using Elasticsearch, BM25, and Solr.",
-            "I have experience in LLM, ColBERT, SPLADE, and hybrid search with NDCG evaluation.",
-            "Sales manager with good communication."
-        ], n),
-        'rare_skills': [
-            [['FAISS', 'LLM'], ['YOLO', 'OpenCV'], ['ColBERT', 'SPLADE', 'LTR'], [], ['BM25']][i]
-            for i in np.random.randint(0, 5, n)
-        ],
-        'assessment_scores': [
-            [
-                {'LTR': 80, 'SentTrans': 75, 'YOLO': 20},
-                {'LTR': 40, 'YOLO': 90, 'CNN': 85},
-                {'LTR': 85, 'SentTrans': 88},
-                {}
-            ][i]
-            for i in np.random.randint(0, 4, n)
-        ],
-        'active_days_since_last_login': np.random.randint(1, 120, n),
-        'open_to_work': np.random.choice([True, False], n),
-        'response_rate': np.random.uniform(0.1, 1.0, n),
-        'notice_period_days': np.random.choice([15, 30, 45, 60, 90, 120], n),
-        'github_stars': np.random.randint(0, 200, n),
-        'ir_roles_count': np.random.randint(0, 6, n),
-        'duration_months': np.random.randint(10, 240, n),
-        'penalty_score': np.random.choice([0, -20], n, p=[0.9, 0.1])
-    })
-    return df
+# ANTI-GAMING: Coherence ratio
+def coherence_score(text, term_list):
+    text_lower = str(text).lower()
+    total_words = max(len(text_lower.split()), 1)
+    
+    total_occurrences = sum(text_lower.count(t) for t in term_list)
+    unique_terms = sum(1 for t in term_list if t in text_lower)
+    
+    if total_occurrences == 0:
+        return 1.0  # no IR terms = not a stuffer, just not relevant
+    
+    repetition_ratio = total_occurrences / max(unique_terms, 1)
+    coherence_multiplier = 1.0 if repetition_ratio <= 3 else max(0.4, 1.0 - (repetition_ratio - 3) * 0.1)
+    
+    density = total_occurrences / max(total_words / 100, 1)
+    density_multiplier = 1.0 if density <= 12 else max(0.5, 1.0 - (density - 12) * 0.05)
+    
+    return coherence_multiplier * density_multiplier
 
-def score_candidates(df):
+# Career trajectory scoring
+def trajectory_score(career_text, duration_months):
+    text_lower = str(career_text).lower()
+    
+    product_mentions = sum(1 for s in PRODUCT_SIGNALS if s in text_lower)
+    growth_role_count = sum(1 for s in GROWTH_TITLES if s in text_lower)
+    stagnant_count = sum(1 for s in STAGNANT_SIGNALS if s in text_lower)
+    
+    company_indicators = text_lower.count(' at ') + text_lower.count('joined ')
+    if duration_months > 0 and company_indicators > 0:
+        avg_tenure = duration_months / max(company_indicators, 1)
+        tenure_score = 10 if avg_tenure >= 24 else 5 if avg_tenure >= 18 else -5
+    else:
+        tenure_score = 0
+    
+    arc_score = (product_mentions * 5) + (growth_role_count * 3) - (stagnant_count * 4) + tenure_score
+    return max(-20, min(25, arc_score))
+
+def score_candidates(df, weights=None):
+    if weights is None:
+        weights = {'ultra_rare_weight': 20, 'services_penalty': -20, 'cv_penalty': -8}
+        
     start_time = time.time()
-    print(f"Scoring {len(df)} candidates...")
     
-    # ==========================================
-    # LAYER 2: Core IR Score
-    # ==========================================
-    
-    # 1. Rare skill bonus (+8 pts each)
-    rare_keywords = set([x.lower() for x in [
-        'FAISS','LLM','reranking','ColBERT','DPR','SPLADE','LambdaMART','BM25',
-        'LTR','dense retrieval','bi-encoder','cross-encoder','HNSW','ANN','vector search'
-    ]])
-    def count_rare(skills):
-        if not isinstance(skills, list): return 0
-        return sum(1 for s in skills if str(s).lower() in rare_keywords)
-    
-    # Vectorized via apply (very fast for lists)
-    df['rare_skill_bonus'] = df['rare_skills'].apply(count_rare) * 8
-    
-    # 2. Gold template bonus (+25 pts for 3+)
-    # Pre-compiling regex makes this lightning fast
-    gold_terms = ['BGE','FAISS','LLM','reranker','dense','sparse','hybrid','recall','precision','NDCG']
-    gold_pattern = re.compile(r'(?i)\b(' + '|'.join(map(re.escape, gold_terms)) + r')\b')
-    def count_unique_gold(text):
+    # 1. Rare skill extraction (from career_description as skills array is synthetic noise)
+    def count_ultra_rare(text):
         if not isinstance(text, str): return 0
-        return len(set(match.lower() for match in gold_pattern.findall(text)))
-        
-    gold_counts = df['career_description'].apply(count_unique_gold)
-    df['gold_template_bonus'] = np.where(gold_counts >= 3, 25, 0)
+        text_lower = text.lower()
+        return sum(1 for t in ULTRA_RARE_TERMS if t in text_lower)
     
-    # 3. IR Roles Score (capped at 60)
-    df['ir_roles_score'] = (df['ir_roles_count'].fillna(0) * 15).clip(upper=60)
+    df['ultra_rare_hit_count'] = df['career_description'].apply(count_ultra_rare)
+    df['rare_skill_bonus'] = df['ultra_rare_hit_count'] * weights['ultra_rare_weight']
     
-    # 4. Unique IR Keywords Count (capped at 30)
-    ir_terms = [
-        'elasticsearch', 'solr', 'lucene', 'opensearch', 'bm25', 'tf-idf', 'vector search', 
-        'ann', 'hnsw', 'faiss', 'pinecone', 'milvus', 'weaviate', 'qdrant', 'chroma', 
-        'learning-to-rank', 'ltr', 'lambdamart', 'xgboost', 'lightgbm', 'catboost', 'ranklib', 
-        'bert', 'sentence-transformers', 'bi-encoder', 'cross-encoder', 'colbert', 'dpr', 
-        'splade', 'bge', 'e5', 'instructor', 'cohere', 'voyage', 'jina', 'reranking', 
-        'semantic search', 'lexical search', 'hybrid search', 'rag'
-    ]
-    ir_pattern = re.compile(r'(?i)\b(' + '|'.join(map(re.escape, ir_terms)) + r')\b')
-    def count_unique_ir(text):
-        if not isinstance(text, str): return 0
-        return len(set(match.lower() for match in ir_pattern.findall(text)))
-        
-    df['unique_ir_keywords_count'] = df['career_description'].apply(count_unique_ir)
-    df['unique_ir_score'] = (df['unique_ir_keywords_count'] * 2).clip(upper=30)
+    # 2. Coherence multiplier (Anti-Gaming)
+    df['coherence_mult'] = df['career_description'].apply(
+        lambda x: coherence_score(str(x), ULTRA_RARE_TERMS + HIGH_VALUE_TERMS)
+    )
     
-    # 5. Assessment Bonus & CV Trap Penalty
-    def get_assessment_bonus(scores):
-        if not isinstance(scores, dict): return 0
+    # 3. Trajectory Score
+    df['trajectory_score'] = df.apply(
+        lambda row: trajectory_score(str(row['career_description']), row.get('duration_months', 0)), axis=1
+    )
+    
+    # 4. Assessment Bonus & CV Trap Penalty
+    def eval_assessment(scores):
+        if not isinstance(scores, dict): return 0, False
         ltr = scores.get('LTR', 0)
         sent = scores.get('SentTrans', 0)
         yolo = scores.get('YOLO', 0)
@@ -121,111 +97,93 @@ def score_candidates(df):
             
         max_ir = max(ltr, sent)
         max_cv = max(yolo, cnn, opencv, weight)
+        is_wrong = False
         if max_cv > 0 and max_cv >= max_ir:
-            bonus -= 5
-        return bonus
+            bonus += weights['cv_penalty']
+            is_wrong = True
+        return bonus, is_wrong
         
-    df['assessment_bonus'] = df['assessment_scores'].apply(get_assessment_bonus)
+    assessment_results = df['assessment_scores'].apply(eval_assessment)
+    df['assessment_bonus'] = assessment_results.apply(lambda x: x[0])
+    df['wrong_domain'] = assessment_results.apply(lambda x: x[1])
     
-    # Fetch penalty score from Layer 1 if it exists
-    penalty = df.get('penalty_score', 0)
+    # 5. Services penalty recalculation (if we want dynamic weights)
+    services_regex = re.compile(r'(?i)\b(TCS|Infosys|Wipro|Accenture|Cognizant)\b')
+    df['services_flag'] = df['career_description'].apply(lambda x: bool(services_regex.search(str(x))))
+    df['dynamic_services_penalty'] = np.where(df['services_flag'], weights['services_penalty'], 0)
     
-    # Sum Layer 2
-    df['layer2_score'] = (
+    # LAYER 2 BASE SCORE
+    df['core_ir_score'] = (
         df['rare_skill_bonus'] + 
-        df['gold_template_bonus'] + 
-        df['ir_roles_score'] + 
-        df['unique_ir_score'] + 
         df['assessment_bonus'] + 
-        penalty
+        df['dynamic_services_penalty']
     )
     
-    # ==========================================
-    # LAYER 3: Behavioral Multiplier
-    # ==========================================
+    # Apply Coherence & Trajectory
+    df['core_ir_score'] = df['core_ir_score'] * df['coherence_mult']
+    df['core_ir_score'] += df['trajectory_score'] * 0.5
     
-    # Vectorized operations for multiplier components
+    # LAYER 3: Behavioral
     active = df['active_days_since_last_login'].fillna(999)
-    m_act = np.where(active < 30, 1.0, 
-            np.where(active <= 60, 0.85, 
-            np.where(active <= 90, 0.70, 0.50)))
-            
-    m_otw = np.where(df['open_to_work'] == True, 1.0, 0.9)
+    resp = df['response_rate'].fillna(0)
     
-    resp = df['response_rate']
-    m_resp = np.where(resp.isnull(), 0.9,
-             np.where(resp > 0.7, 1.0,
-             np.where(resp >= 0.5, 0.95, 0.75)))
+    m_act = np.where(active < 30, 1.0, np.where(active <= 60, 0.85, np.where(active <= 90, 0.70, 0.50)))
+    m_otw = np.where(df['open_to_work'] == True, 1.0, 0.9)
+    m_resp = np.where(resp > 0.7, 1.0, np.where(resp >= 0.5, 0.95, 0.75))
              
     notice = df['notice_period_days'].fillna(30)
-    m_not = np.where(notice < 30, 0.92,
-            np.where(notice <= 60, 1.0,
-            np.where(notice <= 90, 0.85, 0.75)))
+    m_not = np.where(notice < 30, 0.92, np.where(notice <= 60, 1.0, np.where(notice <= 90, 0.85, 0.75)))
             
     stars = df['github_stars'].fillna(0)
     m_git = np.where(stars > 50, 1.05, 1.0)
     
     df['behavioral_multiplier'] = m_act * m_otw * m_resp * m_not * m_git
+    df['final_score'] = df['core_ir_score'] * df['behavioral_multiplier']
     
-    # Note on Overqualified candidates: 
-    # Because there are NO negative penalties applied natively to duration_months, 
-    # candidates with >192 months who are "deep" simply retain their high Layer 2 scores normally!
+    # Ghost Detection
+    GHOST_THRESHOLD = (df['active_days_since_last_login'] > 180) & (df['response_rate'] < 0.1)
+    df['ghost_flag'] = GHOST_THRESHOLD
     
-    # ==========================================
-    # FINAL SCORE & TWIN TIEBREAKER
-    # ==========================================
-    df['final_score'] = df['layer2_score'] * df['behavioral_multiplier']
-    
-    # Tiebreaker logic: Score within 0.5 points uses behavioral_multiplier as tiebreaker
-    # We round score to nearest 0.5 to create bins for exact behavioral sorting within the bin
-    df['score_bin'] = (df['final_score'] * 2).round() / 2
-    
-    df = df.sort_values(
-        by=['score_bin', 'behavioral_multiplier', 'final_score'], 
-        ascending=[False, False, False]
-    ).reset_index(drop=True)
-    
-    df = df.drop(columns=['score_bin'])
-    
-    duration = time.time() - start_time
-    print(f"Finished scoring in {duration:.2f} seconds.\n")
+    df = df.sort_values(by='final_score', ascending=False).reset_index(drop=True)
     return df
 
-def main():
-    df = load_data('filtered_candidates.pkl')
-    scored_df = score_candidates(df)
-    
-    # Save outputs
-    scored_df.to_pickle('scored_candidates.pkl')
-    print("-> Saved FULL scored list to 'scored_candidates.pkl'")
-    
-    top200 = scored_df.head(200)
-    top200.to_pickle('top200_candidates.pkl')
-    print("-> Saved TOP 200 to 'top200_candidates.pkl'\n")
-    
-    # Print Distribution Stats
-    print("=== FINAL SCORE DISTRIBUTION ===")
-    print(scored_df['final_score'].describe().round(2))
-    
-    # Print Top 10 Summary
-    print("\n=== TOP 10 CANDIDATES SUMMARY ===")
-    cols_to_print = ['candidate_id', 'name', 'layer2_score', 'behavioral_multiplier', 'final_score']
-    print(scored_df[cols_to_print].head(10).to_string(index=False))
-    
-    # Print Separation Metrics (Top 10 vs Rank 11-30)
-    print("\n=== SEPARATION: TOP 10 vs TOP 30 ===")
-    if len(scored_df) >= 30:
-        top10_mean = scored_df['final_score'].head(10).mean()
-        top30_mean = scored_df['final_score'].iloc[10:30].mean()
-        diff = top10_mean - top30_mean
-        print(f"Avg Score Top 10: {top10_mean:.2f}")
-        print(f"Avg Score Rank 11-30: {top30_mean:.2f}")
-        print(f"Difference: {diff:.2f} pts")
+def ndcg_optimal_sort(df_top30):
+    """
+    For positions 1-3: require ultra_rare_hit_count >= 2 AND genuine_practitioner=True
+    For positions 4-7: ultra_rare_hit_count >= 1
+    For positions 8-10: any genuine IR candidate
+    """
+    if 'genuine_practitioner' not in df_top30.columns:
+        df_top30['genuine_practitioner'] = False
         
-        # Dive deeper into IR Depth
-        top10_ir = scored_df['unique_ir_keywords_count'].head(10).mean()
-        top30_ir = scored_df['unique_ir_keywords_count'].iloc[10:30].mean()
-        print(f"Avg Unique IR Keywords (Top 10): {top10_ir:.1f}  |  (Rank 11-30): {top30_ir:.1f}")
+    tier_1 = df_top30[
+        (df_top30['ultra_rare_hit_count'] >= 2) & 
+        (df_top30['genuine_practitioner'] == True) &
+        (~df_top30['ghost_flag'].fillna(False))
+    ].sort_values('HYBRID_SCORE', ascending=False).head(3)
+    
+    remaining = df_top30[~df_top30['candidate_id'].isin(tier_1['candidate_id'])]
+    
+    tier_2 = remaining[
+        (remaining['ultra_rare_hit_count'] >= 1) &
+        (remaining['wrong_domain'] == False)
+    ].sort_values('HYBRID_SCORE', ascending=False).head(4)
+    
+    remaining2 = remaining[~remaining['candidate_id'].isin(tier_2['candidate_id'])]
+    
+    tier_3 = remaining2[
+        remaining2['wrong_domain'] == False
+    ].sort_values('HYBRID_SCORE', ascending=False).head(3)
+    
+    remaining3 = remaining2[~remaining2['candidate_id'].isin(tier_3['candidate_id'])].sort_values('HYBRID_SCORE', ascending=False)
+    
+    # Concatenate exactly as described, resulting in NDCG-optimized list
+    return pd.concat([tier_1, tier_2, tier_3, remaining3]).reset_index(drop=True)
 
 if __name__ == "__main__":
-    main()
+    df = load_data('filtered_candidates.pkl')
+    if not df.empty:
+        scored_df = score_candidates(df)
+        scored_df.to_pickle('scored_candidates.pkl')
+        scored_df.head(200).to_pickle('top200_candidates.pkl')
+        print("Completed local score generation.")
