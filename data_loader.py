@@ -11,9 +11,7 @@ FILTER_CONFIG = {
     'input_csv': 'candidates.csv',
     'output_pkl': 'filtered_candidates.pkl',
     
-    # 2b. Patterns considered as non-IR noise or template-generated fake profiles
     'noise_patterns': [
-        r'\blorem ipsum\b',
         r'\btemplate pattern\b',
         r'\bgeneric description\b'
     ],

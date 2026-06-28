@@ -3,8 +3,16 @@
     "candidate_id": 1,
     "name": "Alice Expert",
     "career_description": "Senior Search Engineer with 6 years experience. I build dense retrieval systems using FAISS, BM25, and ColBERT. Implemented LambdaMART for reranking.",
-    "skills": ["Python", "Solr", "FAISS"],
-    "rare_skills": ["FAISS", "ColBERT", "LambdaMART"],
+    "skills": [
+      "Python",
+      "Solr",
+      "FAISS"
+    ],
+    "rare_skills": [
+      "FAISS",
+      "ColBERT",
+      "LambdaMART"
+    ],
     "salary_min": 100000,
     "salary_max": 150000,
     "active_days_since_last_login": 10,
@@ -15,7 +23,11 @@
     "country": "USA",
     "onsite_preference": "hybrid",
     "github_stars": 120,
-    "assessment_scores": {"LTR": 85, "SentTrans": 80, "YOLO": 10},
+    "assessment_scores": {
+      "LTR": 85,
+      "SentTrans": 80,
+      "YOLO": 10
+    },
     "duration_months": 72,
     "ir_roles_count": 3
   },
@@ -23,7 +35,10 @@
     "candidate_id": 2,
     "name": "Bob Distractor",
     "career_description": "I do computer vision using YOLO, CNN, OpenCV. Occasional Elasticsearch.",
-    "skills": ["YOLO", "OpenCV"],
+    "skills": [
+      "YOLO",
+      "OpenCV"
+    ],
     "rare_skills": [],
     "salary_min": 120000,
     "salary_max": 110000,
@@ -35,7 +50,11 @@
     "country": "India",
     "onsite_preference": "onsite",
     "github_stars": 10,
-    "assessment_scores": {"LTR": 40, "YOLO": 95, "CNN": 90},
+    "assessment_scores": {
+      "LTR": 40,
+      "YOLO": 95,
+      "CNN": 90
+    },
     "duration_months": 36,
     "ir_roles_count": 0
   },
@@ -43,7 +62,9 @@
     "candidate_id": 3,
     "name": "Charlie FakeTemplate",
     "career_description": "Lorem ipsum generic template pattern description for a software engineer.",
-    "skills": ["Java"],
+    "skills": [
+      "Java"
+    ],
     "rare_skills": [],
     "salary_min": 50000,
     "salary_max": 80000,
@@ -63,8 +84,13 @@
     "candidate_id": 4,
     "name": "Diana Moderate",
     "career_description": "I work at TCS on Java backends and Elasticsearch. Basic knowledge of BM25 and vector search.",
-    "skills": ["Java", "Elasticsearch"],
-    "rare_skills": ["BM25"],
+    "skills": [
+      "Java",
+      "Elasticsearch"
+    ],
+    "rare_skills": [
+      "BM25"
+    ],
     "salary_min": 90000,
     "salary_max": 120000,
     "active_days_since_last_login": 45,
@@ -75,8 +101,44 @@
     "country": "Canada",
     "onsite_preference": "hybrid",
     "github_stars": 15,
-    "assessment_scores": {"LTR": 60, "SentTrans": 60},
+    "assessment_scores": {
+      "LTR": 60,
+      "SentTrans": 60
+    },
     "duration_months": 48,
     "ir_roles_count": 1
+  },
+  {
+    "candidate_id": 992278,
+    "name": "CAND_0092278 Ghost",
+    "career_description": "Senior Search Engineer with 6 years experience. I build dense retrieval systems using FAISS, BM25, and ColBERT. Implemented LambdaMART for reranking.",
+    "skills": [
+      "Python",
+      "Solr",
+      "FAISS"
+    ],
+    "rare_skills": [
+      "FAISS",
+      "ColBERT",
+      "LambdaMART"
+    ],
+    "salary_min": 100000,
+    "salary_max": 150000,
+    "active_days_since_last_login": 10,
+    "open_to_work": true,
+    "response_rate": 0.07,
+    "notice_period_days": 30,
+    "willing_to_relocate": true,
+    "country": "USA",
+    "onsite_preference": "hybrid",
+    "github_stars": 120,
+    "assessment_scores": {
+      "LTR": 85,
+      "SentTrans": 80
+    },
+    "duration_months": 72,
+    "ir_roles_count": 3,
+    "search_appearance": 1417,
+    "recruiter_saves": 1
   }
 ]

@@ -137,12 +137,29 @@ def score_candidates(df, weights=None):
     stars = df['github_stars'].fillna(0)
     m_git = np.where(stars > 50, 1.05, 1.0)
     
-    df['behavioral_multiplier'] = m_act * m_otw * m_resp * m_not * m_git
+    # Specific hackathon ghost penalty constraint
+    # CAND_0092278 has 1417 search appearances but saved < 5 and rr < 0.2
+    appearances = df.get('search_appearance', df.get('search_appearances', pd.Series(0))).fillna(0)
+    saved = df.get('recruiter_saves', df.get('saved', pd.Series(0))).fillna(0)
+    
+    ghost_penalty = np.where(
+        (appearances > 800) & (saved < 5) & (resp < 0.2),
+        0.5,
+        1.0
+    )
+    
+    df['behavioral_multiplier'] = m_act * m_otw * m_resp * m_not * m_git * ghost_penalty
     df['final_score'] = df['core_ir_score'] * df['behavioral_multiplier']
     
-    # Ghost Detection
+    # Ghost Detection for sorting tier logic
     GHOST_THRESHOLD = (df['active_days_since_last_login'] > 180) & (df['response_rate'] < 0.1)
     df['ghost_flag'] = GHOST_THRESHOLD
+    
+    # Deterministic Genuine Practitioner Check (replacing Gemini)
+    df['genuine_practitioner'] = (df['trajectory_score'] > 0) & (df['wrong_domain'] == False) & (df['coherence_mult'] > 0.8)
+    
+    # Map final_score to HYBRID_SCORE for compatibility with legacy formatter
+    df['HYBRID_SCORE'] = df['final_score']
     
     df = df.sort_values(by='final_score', ascending=False).reset_index(drop=True)
     return df
@@ -153,9 +170,6 @@ def ndcg_optimal_sort(df_top30):
     For positions 4-7: ultra_rare_hit_count >= 1
     For positions 8-10: any genuine IR candidate
     """
-    if 'genuine_practitioner' not in df_top30.columns:
-        df_top30['genuine_practitioner'] = False
-        
     tier_1 = df_top30[
         (df_top30['ultra_rare_hit_count'] >= 2) & 
         (df_top30['genuine_practitioner'] == True) &

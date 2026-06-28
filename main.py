@@ -11,7 +11,6 @@ from rich.panel import Panel
 import data_loader
 import jd_parser
 import scorer
-import reranker
 import output_formatter
 
 console = Console()
@@ -21,7 +20,6 @@ def main():
     parser.add_argument("--jd", type=str, required=True, help="Path to Job Description txt file")
     parser.add_argument("--candidates", type=str, required=True, help="Path to candidates json/csv")
     parser.add_argument("--output", type=str, default="results", help="Output directory")
-    parser.add_argument("--skip-rerank", action="store_true", help="Skip the LLM semantic reranking phase")
     parser.add_argument("--sensitivity", action="store_true", help="Run sensitivity analysis and exit")
     args = parser.parse_args()
 
@@ -75,38 +73,29 @@ def main():
         scored_df.head(200).to_pickle(top200_path)
         progress.update(task3, description=f"[green]✔ Step 3: Scored ({time.time()-t0:.2f}s) | Top 200 isolated.[/green]")
         
-        # Step 4: Rerank
+        # Step 4: Deterministic Rerank
         t0 = time.time()
-        if args.skip_rerank:
-            task4 = progress.add_task("[yellow]Step 4: Semantic Reranking (SKIPPED)...", total=None)
-            final_df = scored_df.copy()
-            final_df['rule_score'] = final_df['final_score']
-            final_df['HYBRID_SCORE'] = final_df['rule_score']
-            final_df['semantic_score'] = 0.0
-            final_df['recruiter_summary'] = "Reranking skipped."
-            final_df['key_strengths'] = "N/A"
-            final_df = final_df.sort_values(by='HYBRID_SCORE', ascending=False).reset_index(drop=True)
-            final_df['rank'] = final_df.index + 1
-            final_df.to_pickle(os.path.join(args.output, 'final_ranked.pkl'))
-            progress.update(task4, description="[yellow]✔ Step 4: Reranking Skipped (Testing mode)[/yellow]")
-        else:
-            task4 = progress.add_task("[cyan]Step 4: Gemini Semantic Reranking (Batched API calls)...", total=None)
-            
-            # reranker.py hardcodes 'top200_candidates.pkl' in local dir, copy it there temporarily
-            shutil.copy(top200_path, 'top200_candidates.pkl')
-            try:
-                reranker.main()
-                # Move outputs to results dir
-                if os.path.exists('final_ranked.pkl'):
-                    shutil.move('final_ranked.pkl', os.path.join(args.output, 'final_ranked.pkl'))
-                if os.path.exists('final_ranking.csv'):
-                    shutil.move('final_ranking.csv', os.path.join(args.output, 'final_ranking.csv'))
-                if os.path.exists('top200_candidates.pkl'):
-                    os.remove('top200_candidates.pkl')
-                    
-                progress.update(task4, description=f"[green]✔ Step 4: Reranked via Gemini ({time.time()-t0:.2f}s)[/green]")
-            except Exception as e:
-                progress.update(task4, description=f"[red]✖ Step 4 Failed: {e}[/red]")
+        task4 = progress.add_task("[yellow]Step 4: LLM Reranking (REMOVED per Hackathon Rules)[/yellow]", total=None)
+        
+        final_df = scored_df.copy()
+        final_df['rule_score'] = final_df['final_score']
+        final_df['semantic_score'] = 0.0
+        final_df['key_strengths'] = "N/A"
+        
+        # Apply NDCG optimal sort directly using deterministic score
+        final_df = scorer.ndcg_optimal_sort(final_df.head(200))
+        final_df['rank'] = final_df.index + 1
+        
+        final_df.to_pickle(os.path.join(args.output, 'final_ranked.pkl'))
+        
+        # Save CSV logic that was previously in reranker.py
+        csv_cols = ['rank', 'candidate_id', 'name', 'HYBRID_SCORE', 'rule_score', 'semantic_score', 'recruiter_summary', 'key_strengths', 'ultra_rare_hit_count', 'genuine_practitioner', 'wrong_domain']
+        csv_df = final_df.rename(columns={'name': 'candidate_name'})
+        csv_cols = [c if c != 'name' else 'candidate_name' for c in csv_cols]
+        csv_cols = [c for c in csv_cols if c in csv_df.columns]
+        csv_df[csv_cols].to_csv(os.path.join(args.output, 'final_ranking.csv'), index=False)
+        
+        progress.update(task4, description=f"[yellow]✔ Step 4: Reranking replaced with deterministic optimal sort ({time.time()-t0:.2f}s)[/yellow]")
                 
         # Step 5: Output Formatter
         task5 = progress.add_task("[cyan]Step 5: Generating Reports...", total=None)

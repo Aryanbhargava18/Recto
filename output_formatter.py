@@ -13,7 +13,7 @@ def generate_audit_trail(row):
             components.append(f"rare IR signal: {', '.join(terms)}")
     
     if row.get('genuine_practitioner'):
-        components.append("Gemini: genuine practitioner")
+        components.append("Heuristics: genuine practitioner")
     
     if row.get('wrong_domain'):
         components.append("PENALIZED: CV/speech domain mismatch")
@@ -137,7 +137,7 @@ Recto is an advanced, multi-layered pipeline designed to identify the absolute b
 
 Our most crucial finding: **Only 162 real candidates exist among 100,000 — the rest are distractor noise, salary honeypots, or career template copies.** 
 
-By leveraging hard-kill heuristics, deeply tuned IR rule-based scoring, and Gemini 2.5 Flash semantic analysis, Recto completely eliminates the noise and bubbles the true experts to the top.
+By leveraging hard-kill heuristics and deeply tuned IR rule-based scoring, Recto completely eliminates the noise and bubbles the true experts to the top.
 
 ## Top 10 Candidate Profiles
 """
@@ -160,7 +160,7 @@ Our scoring algorithm processes candidates through a rigorous 3-layer funnel:
 2. **Layer 2: Core IR Scoring** - Vectorized term matching evaluating domain depth. Uses Coherence Ratio to penalize keyword stuffers and Trajectory modeling for seniority arcs.
 3. **Layer 3: Behavioral Multipliers** - Holistic modifiers adjusting scores based on notice periods, response rates, and open-to-work status. Ghost candidates (inactive > 180d) are penalized.
 
-Finally, the **Semantic Reranker** leverages Gemini 2.5 Flash to evaluate the top 200 candidates, performs pairwise Boundary Calibration at ranks 8-14, and applies a rigid NDCG-optimal tier sorting mechanism for the top 10.
+Finally, the **Deterministic Sorter** evaluates the top 200 candidates and applies a rigid NDCG-optimal tier sorting mechanism for the top 10.
 """
     with open(os.path.join(output_dir, 'recto_report.md'), 'w', encoding='utf-8') as f:
         f.write(report_content)
