@@ -58,108 +58,212 @@ def trajectory_score(career_text, duration_months):
 
 def score_candidates(df, weights=None):
     if weights is None:
-        weights = {'ultra_rare_weight': 20, 'services_penalty': -20, 'cv_penalty': -8}
+        weights = {}
         
     start_time = time.time()
     
-    # 1. Rare skill extraction (from career_description as skills array is synthetic noise)
-    def count_ultra_rare(text):
-        if not isinstance(text, str): return 0
-        text_lower = text.lower()
-        return sum(1 for t in ULTRA_RARE_TERMS if t in text_lower)
+    RARE_SKILLS = [
+        'Information Retrieval Systems', 'Search Infrastructure', 'Ranking Systems',
+        'Text Encoders', 'Dense Retrieval', 'Indexing Algorithms',
+        'Embedding Models', 'Passage Retrieval', 'Query Understanding',
+        'Semantic Indexing', 'Document Reranking', 'Retrieval Augmented Generation',
+        'Learning to Rank', 'Sparse Retrieval'
+    ]
     
-    df['ultra_rare_hit_count'] = df['career_description'].apply(count_ultra_rare)
-    df['rare_skill_bonus'] = df['ultra_rare_hit_count'] * weights['ultra_rare_weight']
+    IR_TEMPLATES = [
+        'bm25', 'dense retrieval', 'hybrid search', 'vector', 'embedding',
+        'information retrieval', 'semantic search', 'ranking', 'faiss',
+        'pinecone', 'weaviate', 'elasticsearch', 'ndcg', 'bi-encoder'
+    ]
     
-    # 2. Coherence multiplier (Anti-Gaming)
-    df['coherence_mult'] = df['career_description'].apply(
-        lambda x: coherence_score(str(x), ULTRA_RARE_TERMS + HIGH_VALUE_TERMS)
-    )
+    RELEVANT_ASSESSMENTS = [
+        'Learning to Rank', 'Sentence Transformers', 'FAISS',
+        'Vector Search', 'Semantic Search', 'Embeddings',
+        'Fine-tuning LLMs', 'RAG', 'Haystack', 'Weaviate'
+    ]
     
-    # 3. Trajectory Score
-    df['trajectory_score'] = df.apply(
-        lambda row: trajectory_score(str(row['career_description']), row.get('duration_months', 0)), axis=1
-    )
-    
-    # 4. Assessment Bonus & CV Trap Penalty
-    def eval_assessment(scores):
-        if not isinstance(scores, dict): return 0, False
-        ltr = scores.get('LTR', 0)
-        sent = scores.get('SentTrans', 0)
-        yolo = scores.get('YOLO', 0)
-        cnn = scores.get('CNN', 0)
-        opencv = scores.get('OpenCV', 0)
-        weight = scores.get('Weight', 0)
+    def calc_row_score(row):
+        # STEP 1: Core technical score (additive, no multiplier)
+        core_score = 0
         
-        bonus = 0
-        if ltr > 70 or sent > 70:
-            bonus += 6
-            
-        max_ir = max(ltr, sent)
-        max_cv = max(yolo, cnn, opencv, weight)
-        is_wrong = False
-        if max_cv > 0 and max_cv >= max_ir:
-            bonus += weights['cv_penalty']
-            is_wrong = True
-        return bonus, is_wrong
+        # Rare skills — each held rare skill = +12 pts (additive)
+        candidate_skills = row.get('skills', [])
+        if not isinstance(candidate_skills, list):
+            candidate_skills = []
+        rare_hits = sum(1 for s in candidate_skills if s in RARE_SKILLS)
+        core_score += rare_hits * 12
         
-    assessment_results = df['assessment_scores'].apply(eval_assessment)
-    df['assessment_bonus'] = assessment_results.apply(lambda x: x[0])
-    df['wrong_domain'] = assessment_results.apply(lambda x: x[1])
-    
-    # 5. Services penalty recalculation (if we want dynamic weights)
-    services_regex = re.compile(r'(?i)\b(TCS|Infosys|Wipro|Accenture|Cognizant)\b')
-    df['services_flag'] = df['career_description'].apply(lambda x: bool(services_regex.search(str(x))))
-    df['dynamic_services_penalty'] = np.where(df['services_flag'], weights['services_penalty'], 0)
-    
-    # LAYER 2 BASE SCORE
-    df['core_ir_score'] = (
-        df['rare_skill_bonus'] + 
-        df['assessment_bonus'] + 
-        df['dynamic_services_penalty']
-    )
-    
-    # Apply Coherence & Trajectory
-    df['core_ir_score'] = df['core_ir_score'] * df['coherence_mult']
-    df['core_ir_score'] += df['trajectory_score'] * 0.5
-    
-    # LAYER 3: Behavioral
-    active = df['active_days_since_last_login'].fillna(999)
-    resp = df['response_rate'].fillna(0)
-    
-    m_act = np.where(active < 30, 1.0, np.where(active <= 60, 0.85, np.where(active <= 90, 0.70, 0.50)))
-    m_otw = np.where(df['open_to_work'] == True, 1.0, 0.9)
-    m_resp = np.where(resp > 0.7, 1.0, np.where(resp >= 0.5, 0.95, 0.75))
-             
-    notice = df['notice_period_days'].fillna(30)
-    m_not = np.where(notice < 30, 0.92, np.where(notice <= 60, 1.0, np.where(notice <= 90, 0.85, 0.75)))
+        career_text_lower = str(row.get('career_description', '')).lower()
+        
+        # Gold template
+        has_gold_template = 'connect users with relevant information at scale' in career_text_lower
+        if has_gold_template:
+            core_score += 25
             
-    stars = df['github_stars'].fillna(0)
-    m_git = np.where(stars > 50, 1.05, 1.0)
+        # IR role count = +15 pts each (up to 3 roles = +45)
+        # Note: the user provided a snippet for this in output_formatter:
+        # we can just use a proxy here or calculate exactly
+        # Since career_history was flattened, we can look at occurrences of IR_TEMPLATES
+        ir_role_count = row.get('ir_roles_count', 0)
+        # Wait, ir_roles_count wasn't extracted in data_loader! Let's calculate it if missing.
+        # Actually, let's just count occurrences of IR templates in career_description loosely 
+        # or wait, output_formatter generator has exact logic for ir_role_count:
+        # "desc = (ch.get('description', '') + ' ' + ch.get('title', '')).lower(); if any(kw in desc for kw in IR_TEMPLATES)..."
+        # Since I am in the scorer, I can either extract it from the raw column or approximate.
+        # Wait! df['profile'] wasn't dropped! I can iterate over row['career_history']
+        career = row.get('career_history', [])
+        if not isinstance(career, list): career = []
+        computed_ir_role_count = 0
+        for ch in career:
+            desc = (ch.get('description', '') + ' ' + ch.get('title', '')).lower()
+            if any(kw in desc for kw in IR_TEMPLATES):
+                computed_ir_role_count += 1
+        core_score += min(computed_ir_role_count, 4) * 10
+        
+        # Unique IR keywords in text
+        unique_ir_keywords_in_text = sum(1 for kw in IR_TEMPLATES if kw in career_text_lower)
+        core_score += min(unique_ir_keywords_in_text, 5) * 3
+        
+        # Relevant IR assessments
+        assessments = row.get('assessment_scores', {})
+        if not isinstance(assessments, dict): assessments = {}
+        relevant_assessment_count = sum(1 for k in assessments.keys() if k in RELEVANT_ASSESSMENTS)
+        core_score += min(relevant_assessment_count, 3) * 6
+        
+        yoe = row.get('duration_months', 0) / 12.0
+        if 5 <= yoe <= 9:
+            core_score += 5
+        elif 4 <= yoe < 5 or 9 < yoe <= 12:
+            core_score += 2
+            
+        # Tier-1 education
+        tier_1_edu = False
+        education = row.get('education', [])
+        if isinstance(education, list):
+            for e in education:
+                if isinstance(e, dict) and e.get('tier') == 'tier_1':
+                    tier_1_edu = True
+                    break
+        if tier_1_edu:
+            core_score += 3
+            
+        # Services-only disqualifier
+        services_regex = re.compile(r'(?i)\b(TCS|Infosys|Wipro|Accenture|Cognizant)\b')
+        services_only_career = bool(services_regex.search(career_text_lower))
+        if services_only_career:
+            core_score -= 20
+            
+        # STEP 2: Behavioral multiplier (NEVER below 0.4)
+        behavioral_mult = 1.0
+        
+        days_since_active = row.get('active_days_since_last_login', 999)
+        if pd.isna(days_since_active): days_since_active = 999
+        if days_since_active <= 30:
+            behavioral_mult *= 1.0
+        elif days_since_active <= 60:
+            behavioral_mult *= 0.85
+        elif days_since_active <= 90:
+            behavioral_mult *= 0.70
+        else:
+            behavioral_mult *= 0.50
+            
+        open_to_work = row.get('open_to_work', False)
+        if not open_to_work:
+            behavioral_mult *= 0.90
+            
+        recruiter_response_rate = row.get('response_rate', 0.0)
+        if pd.isna(recruiter_response_rate): recruiter_response_rate = 0.0
+        if recruiter_response_rate >= 0.7:
+            behavioral_mult *= 1.0
+        elif recruiter_response_rate >= 0.5:
+            behavioral_mult *= 0.95
+        elif recruiter_response_rate >= 0.3:
+            behavioral_mult *= 0.85
+        else:
+            behavioral_mult *= 0.75
+            
+        notice_period_days = row.get('notice_period_days', 90)
+        if pd.isna(notice_period_days): notice_period_days = 90
+        if notice_period_days <= 30:
+            behavioral_mult *= 1.0
+        elif notice_period_days <= 60:
+            behavioral_mult *= 0.92
+        elif notice_period_days <= 90:
+            behavioral_mult *= 0.82
+        else:
+            behavioral_mult *= 0.70
+            
+        search_appearance_30d = row.get('search_appearance', 0)
+        if pd.isna(search_appearance_30d): search_appearance_30d = 0
+        saved_by_recruiters_30d = row.get('recruiter_saves', 0)
+        if pd.isna(saved_by_recruiters_30d): saved_by_recruiters_30d = 0
+        
+        is_ghost = False
+        if search_appearance_30d > 800 and saved_by_recruiters_30d < 5 and recruiter_response_rate < 0.2:
+            behavioral_mult *= 0.50
+            is_ghost = True
+            
+        behavioral_mult = max(behavioral_mult, 0.40)
+        
+        # STEP 3: Saved-by-recruiters bonus
+        saved_bonus = 0
+        if saved_by_recruiters_30d > 60:
+            saved_bonus = 15
+        elif saved_by_recruiters_30d > 30:
+            saved_bonus = 10
+        elif saved_by_recruiters_30d > 15:
+            saved_bonus = 6
+        elif saved_by_recruiters_30d > 5:
+            saved_bonus = 3
+            
+        # STEP 4: LinkedIn bonus
+        # Look at redrob_signals if needed, but since we didn't extract linkedin_connected, let's extract it safely
+        redrob = row.get('redrob_signals', {})
+        if not isinstance(redrob, dict): redrob = {}
+        linkedin_connected = redrob.get('linkedin_connected', False)
+        linkedin_bonus = 4 if linkedin_connected else 0
+        
+        # STEP 5: GitHub bonus
+        github_activity_score = row.get('github_stars', 0)
+        if pd.isna(github_activity_score): github_activity_score = 0
+        github_bonus = 0
+        if github_activity_score >= 70:
+            github_bonus = 3
+        elif github_activity_score >= 50:
+            github_bonus = 2
+        elif github_activity_score >= 30:
+            github_bonus = 1
+            
+        final_score = (core_score * behavioral_mult) + saved_bonus + linkedin_bonus + github_bonus
+        
+        # Required extra fields for deterministic sort and output
+        # For tier logic, ultra_rare_hit_count is used. It's rare_hits (from RARE_SKILLS array) or from ULTRA_RARE_TERMS?
+        # Let's define ultra_rare_hit_count as rare_hits (rare skills held) 
+        # Wait, the instruction says "rank 10 has 8 rare hits". The script calls it `ultra_rare_hit_count = 8`.
+        ultra_rare_hit_count = rare_hits
+        genuine_practitioner = (computed_ir_role_count >= 1) and (not services_only_career)
+        
+        return pd.Series({
+            'final_score': final_score,
+            'ultra_rare_hit_count': ultra_rare_hit_count,
+            'genuine_practitioner': genuine_practitioner,
+            'wrong_domain': False,  # Simplified since cv_penalty removed from core score
+            'ghost_flag': is_ghost,
+            'ir_roles_count': computed_ir_role_count
+        })
+
+    # Apply calculation
+    results = df.apply(calc_row_score, axis=1)
+    df['final_score'] = results['final_score']
+    df['ultra_rare_hit_count'] = results['ultra_rare_hit_count']
+    df['genuine_practitioner'] = results['genuine_practitioner']
+    df['wrong_domain'] = results['wrong_domain']
+    df['ghost_flag'] = results['ghost_flag']
+    df['ir_roles_count'] = results['ir_roles_count']
     
-    # Specific hackathon ghost penalty constraint
-    # CAND_0092278 has 1417 search appearances but saved < 5 and rr < 0.2
-    appearances = df.get('search_appearance', df.get('search_appearances', pd.Series(0))).fillna(0)
-    saved = df.get('recruiter_saves', df.get('saved', pd.Series(0))).fillna(0)
-    
-    ghost_penalty = np.where(
-        (appearances > 800) & (saved < 5) & (resp < 0.2),
-        0.5,
-        1.0
-    )
-    
-    df['behavioral_multiplier'] = m_act * m_otw * m_resp * m_not * m_git * ghost_penalty
-    df['final_score'] = df['core_ir_score'] * df['behavioral_multiplier']
-    
-    # Ghost Detection for sorting tier logic
-    GHOST_THRESHOLD = (df['active_days_since_last_login'] > 180) & (df['response_rate'] < 0.1)
-    df['ghost_flag'] = GHOST_THRESHOLD
-    
-    # Deterministic Genuine Practitioner Check (replacing Gemini)
-    df['genuine_practitioner'] = (df['trajectory_score'] > 0) & (df['wrong_domain'] == False) & (df['coherence_mult'] > 0.8)
-    
-    # Map final_score to HYBRID_SCORE for compatibility with legacy formatter
     df['HYBRID_SCORE'] = df['final_score']
+    df['rule_score'] = df['final_score']
+    df['semantic_score'] = 0.0
     
     df = df.sort_values(by='final_score', ascending=False).reset_index(drop=True)
     return df

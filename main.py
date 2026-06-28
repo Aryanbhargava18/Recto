@@ -82,18 +82,10 @@ def main():
         final_df['semantic_score'] = 0.0
         final_df['key_strengths'] = "N/A"
         
-        # Apply NDCG optimal sort directly using deterministic score
-        final_df = scorer.ndcg_optimal_sort(final_df.head(200))
-        final_df['rank'] = final_df.index + 1
+        final_df = final_df.sort_values(by='final_score', ascending=False).reset_index(drop=True)
+        final_df['rank'] = range(1, len(final_df) + 1)
         
         final_df.to_pickle(os.path.join(args.output, 'final_ranked.pkl'))
-        
-        # Save CSV logic that was previously in reranker.py
-        csv_cols = ['rank', 'candidate_id', 'name', 'HYBRID_SCORE', 'rule_score', 'semantic_score', 'recruiter_summary', 'key_strengths', 'ultra_rare_hit_count', 'genuine_practitioner', 'wrong_domain']
-        csv_df = final_df.rename(columns={'name': 'candidate_name'})
-        csv_cols = [c if c != 'name' else 'candidate_name' for c in csv_cols]
-        csv_cols = [c for c in csv_cols if c in csv_df.columns]
-        csv_df[csv_cols].to_csv(os.path.join(args.output, 'final_ranking.csv'), index=False)
         
         progress.update(task4, description=f"[yellow]✔ Step 4: Reranking replaced with deterministic optimal sort ({time.time()-t0:.2f}s)[/yellow]")
                 

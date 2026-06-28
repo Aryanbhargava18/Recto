@@ -168,11 +168,10 @@ def apply_filters(df, config):
         summary['removed_non_technical'] = condition_d.sum()
         df = df[~condition_d].copy()
         
-    # e. country='India' AND willing_to_relocate=False AND onsite_preference='onsite'
-    if all(col in df.columns for col in ['country', 'willing_to_relocate', 'onsite_preference']):
-        condition_e = (df['country'].str.lower() == 'india') & \
-                      (df['willing_to_relocate'] == False) & \
-                      (df['onsite_preference'].str.lower() == 'onsite')
+    # e. Hard disqualify: outside India + unwilling to relocate
+    if 'country' in df.columns and 'willing_to_relocate' in df.columns:
+        is_outside_india = (df['country'].str.lower() != 'india') & (df['country'].str.strip() != '')
+        condition_e = is_outside_india & (df['willing_to_relocate'] == False)
         summary['removed_location_mismatch'] = condition_e.sum()
         df = df[~condition_e].copy()
         
