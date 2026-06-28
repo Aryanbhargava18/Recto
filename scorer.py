@@ -56,11 +56,60 @@ def trajectory_score(career_text, duration_months):
     arc_score = (product_mentions * 5) + (growth_role_count * 3) - (stagnant_count * 4) + tenure_score
     return max(-20, min(25, arc_score))
 
+def is_title_chaser(career_history):
+    import pandas as pd
+    short_stints = 0
+    for ch in career_history:
+        start = ch.get('start_date', '')
+        end = ch.get('end_date', '')
+        if pd.isna(start) or not start: continue
+        if pd.isna(end) or not end: end = ''
+        try:
+            from datetime import datetime
+            s = datetime.strptime(str(start)[:7], '%Y-%m')
+            e_str = str(end)[:7] if end else datetime.now().strftime('%Y-%m')
+            e = datetime.strptime(e_str, '%Y-%m')
+            months = (e.year - s.year) * 12 + (e.month - s.month)
+            if months < 18:
+                short_stints += 1
+        except:
+            continue
+    total_roles = len(career_history)
+    return total_roles >= 3 and short_stints / total_roles > 0.6
+
+def compute_avg_tenure(career_history):
+    import pandas as pd
+    from datetime import datetime
+    durations = []
+    for ch in career_history:
+        start = ch.get('start_date', '')
+        end = ch.get('end_date', '')
+        if pd.isna(start) or not start: continue
+        if pd.isna(end) or not end: end = ''
+        try:
+            s = datetime.strptime(str(start)[:7], '%Y-%m')
+            e_str = str(end)[:7] if end else datetime.now().strftime('%Y-%m')
+            e = datetime.strptime(e_str, '%Y-%m')
+            months = (e.year - s.year) * 12 + (e.month - s.month)
+            if months > 0:
+                durations.append(months)
+        except:
+            continue
+    return sum(durations) / len(durations) if durations else 24
+
 def score_candidates(df, weights=None):
     if weights is None:
         weights = {}
         
     start_time = time.time()
+    
+    PRODUCTION_SCALE_SIGNALS = [
+        'serving', 'deployed to', 'production', 'a/b test', 'live traffic',
+        'millions of queries', 'billions of documents', '50m+', '35m+',
+        'millions of users', 'low latency', 'index refresh',
+        'embedding drift', 'retrieval-quality regression',
+        'online', 'offline experimentation',
+    ]
     
     RARE_SKILLS = [
         'Information Retrieval Systems', 'Search Infrastructure', 'Ranking Systems',
@@ -72,8 +121,24 @@ def score_candidates(df, weights=None):
     
     IR_TEMPLATES = [
         'bm25', 'dense retrieval', 'hybrid search', 'vector', 'embedding',
-        'information retrieval', 'semantic search', 'ranking', 'faiss',
-        'pinecone', 'weaviate', 'elasticsearch', 'ndcg', 'bi-encoder'
+        'faiss', 'ndcg', 'bi-encoder', 'reranker', 'semantic search',
+        'elasticsearch', 'pinecone', 'weaviate', 'milvus', 'qdrant',
+        'information retrieval', 'passage retrieval', 'sparse and dense',
+        'most relevant matches across a large dataset',
+        'what users are looking for and connect them',
+        'surface relevant content to users at scale',
+        'billions of documents and served millions of queries',
+        'search and discovery experience end-to-end',
+        'ranking layer',
+        'surface the right thing at the right time',
+        'bm25-only retrieval to a hybrid setup',
+        'retrieval system',
+        'retrieval to a hybrid',
+        'most relevant results',
+        'ranking system',
+        'search infrastructure',
+        'learning-to-rank',
+        'sentence-transformers'
     ]
     
     RELEVANT_ASSESSMENTS = [
@@ -87,11 +152,16 @@ def score_candidates(df, weights=None):
         core_score = 0
         
         # Rare skills — each held rare skill = +12 pts (additive)
-        candidate_skills = row.get('skills', [])
-        if not isinstance(candidate_skills, list):
-            candidate_skills = []
-        rare_hits = sum(1 for s in candidate_skills if s in RARE_SKILLS)
-        core_score += rare_hits * 12
+        # Rare skills — each held rare skill = +12 pts (additive)
+        skills = row.get('skills', [])
+        if not isinstance(skills, list): skills = []
+        
+        candidate_skill_names = [str(s).strip().lower() for s in skills]
+        rare_skills_lower = [rs.lower() for rs in RARE_SKILLS]
+        matched_rare_skills = [rs for rs in rare_skills_lower if rs in candidate_skill_names]
+        
+        rare_hits = len(matched_rare_skills)
+        core_score += min(rare_hits, 8) * 12
         
         career_text_lower = str(row.get('career_description', '')).lower()
         
@@ -118,7 +188,21 @@ def score_candidates(df, weights=None):
             desc = (ch.get('description', '') + ' ' + ch.get('title', '')).lower()
             if any(kw in desc for kw in IR_TEMPLATES):
                 computed_ir_role_count += 1
+                prod_hits = sum(1 for p in PRODUCTION_SCALE_SIGNALS if p in desc)
+                if prod_hits >= 2:
+                    core_score += 5
         core_score += min(computed_ir_role_count, 4) * 10
+        
+        avg_tenure = compute_avg_tenure(career)
+        if avg_tenure < 12:
+            core_score -= 12   # genuine job-hopper
+        elif avg_tenure < 18:
+            core_score -= 5    # mild concern, not disqualifying
+        elif avg_tenure > 30:
+            core_score += 3
+            
+        if is_title_chaser(career):
+            core_score -= 8
         
         # Unique IR keywords in text
         unique_ir_keywords_in_text = sum(1 for kw in IR_TEMPLATES if kw in career_text_lower)
@@ -169,7 +253,7 @@ def score_candidates(df, weights=None):
             
         open_to_work = row.get('open_to_work', False)
         if not open_to_work:
-            behavioral_mult *= 0.90
+            behavioral_mult *= 0.96
             
         recruiter_response_rate = row.get('response_rate', 0.0)
         if pd.isna(recruiter_response_rate): recruiter_response_rate = 0.0
@@ -206,15 +290,20 @@ def score_candidates(df, weights=None):
         behavioral_mult = max(behavioral_mult, 0.40)
         
         # STEP 3: Saved-by-recruiters bonus
+        redrob = row.get('redrob_signals', {})
+        if not isinstance(redrob, dict): redrob = {}
+        saved_by_recruiters_30d = redrob.get('saved_by_recruiters_30d', 0)
         saved_bonus = 0
         if saved_by_recruiters_30d > 60:
-            saved_bonus = 15
+            saved_bonus = 18
         elif saved_by_recruiters_30d > 30:
             saved_bonus = 10
         elif saved_by_recruiters_30d > 15:
             saved_bonus = 6
         elif saved_by_recruiters_30d > 5:
             saved_bonus = 3
+        elif saved_by_recruiters_30d == 0:
+            saved_bonus = -25
             
         # STEP 4: LinkedIn bonus
         # Look at redrob_signals if needed, but since we didn't extract linkedin_connected, let's extract it safely
@@ -222,6 +311,24 @@ def score_candidates(df, weights=None):
         if not isinstance(redrob, dict): redrob = {}
         linkedin_connected = redrob.get('linkedin_connected', False)
         linkedin_bonus = 4 if linkedin_connected else 0
+        
+        apps = redrob.get('applications_submitted_30d', 0)
+        if apps > 0:
+            core_score += min(apps * 0.4, 6)
+        elif apps == 0:
+            core_score -= 2
+            
+        icr = redrob.get('interview_completion_rate', 0.5)
+        if icr >= 0.8:
+            behavioral_mult *= 1.04
+        elif icr < 0.4:
+            behavioral_mult *= 0.88
+            
+        verified = redrob.get('verified_email', False) and redrob.get('verified_phone', False)
+        if verified:
+            core_score += 2
+        elif not redrob.get('verified_email', False) and not redrob.get('verified_phone', False):
+            core_score -= 3
         
         # STEP 5: GitHub bonus
         github_activity_score = row.get('github_stars', 0)
