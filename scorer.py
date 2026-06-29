@@ -227,9 +227,8 @@ def score_candidates(df, weights=None):
             company = str(ch.get('company', '')).lower()
             
             is_ir = any(kw in desc for kw in IR_TEMPLATES)
-            is_edtech = any(e in company for e in ['upgrad', 'byju', 'unacademy', 'vedantu', 'simplilearn'])
             
-            if any(t in title for t in ML_TITLES) and is_ir and not is_edtech:
+            if any(t in title for t in ML_TITLES):
                 try:
                     s = datetime.strptime(start[:7], '%Y-%m')
                     e = datetime.strptime(end[:7], '%Y-%m')
@@ -300,7 +299,7 @@ def score_candidates(df, weights=None):
         unique_companies = len(set(ch.get('company', '') for ch in career if ch.get('company')))
         if unique_companies == 1 and yoe >= 5:
             core_score -= 6  # never changed context in 5+ years
-        elif unique_companies == 2 and yoe >= 7:
+        elif unique_companies == 2 and yoe >= 10:
             core_score -= 3  # limited breadth for senior role
         
         # Title match bonus
@@ -402,7 +401,12 @@ def score_candidates(df, weights=None):
         elif 0 <= oar < 0.3:
             behavioral_mult *= 0.90
             
-        # Tiered behavioral floor
+        # Tiered behavioral floor and ceiling
+        if rare_hits >= 3:
+            behavioral_mult = max(behavioral_mult, 0.70)
+        elif rare_hits <= 1:
+            behavioral_mult = min(behavioral_mult, 0.80)
+            
         if core_score >= 80:
             behavioral_mult = max(behavioral_mult, 0.55)
         else:
