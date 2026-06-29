@@ -5,6 +5,7 @@ import math
 import pickle
 import os
 import time
+from datetime import datetime
 
 ULTRA_RARE_TERMS = ['bm25', 'ndcg', 'mrr', 'embedding', 'bi-encoder', 'cross-encoder', 'dense retrieval', 'sparse retrieval', 'hybrid retrieval', 'reranking', 'colbert', 'dpr', 'splade', 'hnsw', 'ann index', 'vector search', 'recall@k', 'precision@k']
 HIGH_VALUE_TERMS = ['elasticsearch', 'solr', 'lucene', 'opensearch', 'faiss', 'pinecone', 'milvus', 'weaviate', 'qdrant', 'chroma']
@@ -210,12 +211,34 @@ def score_candidates(df, weights=None):
         total_ir_density = 0
         pre_llm_ir = False
         
+        ML_TITLES = [
+            'machine learning', 'ml engineer', 'ai engineer', 'data scientist',
+            'nlp engineer', 'applied scientist', 'research engineer',
+            'search engineer', 'recommendation', 'ranking engineer'
+        ]
+        ml_years = 0
+        
         for ch in career:
             desc = (ch.get('description', '') + ' ' + ch.get('title', '')).lower()
             start = str(ch.get('start_date', ''))
+            end_raw = ch.get('end_date')
+            end = str(end_raw) if end_raw else datetime.now().strftime('%Y-%m')
+            title = str(ch.get('title', '')).lower()
             company = str(ch.get('company', '')).lower()
             
-            if any(kw in desc for kw in IR_TEMPLATES):
+            is_ir = any(kw in desc for kw in IR_TEMPLATES)
+            is_edtech = any(e in company for e in ['upgrad', 'byju', 'unacademy', 'vedantu', 'simplilearn'])
+            
+            if any(t in title for t in ML_TITLES) and is_ir and not is_edtech:
+                try:
+                    s = datetime.strptime(start[:7], '%Y-%m')
+                    e = datetime.strptime(end[:7], '%Y-%m')
+                    months = (e.year - s.year) * 12 + (e.month - s.month)
+                    ml_years += max(months / 12, 0)
+                except Exception:
+                    pass
+            
+            if is_ir:
                 computed_ir_role_count += 1
                 
                 if start and start[:4] < '2022':
@@ -239,6 +262,13 @@ def score_candidates(df, weights=None):
             
         if pre_llm_ir:
             core_score += 5  # Scaled down from 7
+            
+        if ml_years >= 4:
+            core_score += 6
+        elif ml_years >= 3:
+            core_score += 3
+        elif ml_years < 2:
+            core_score -= 8  # claimed ML experience but mostly other work
         
         avg_tenure = compute_avg_tenure(career)
         if avg_tenure < 12:
@@ -266,6 +296,12 @@ def score_candidates(df, weights=None):
             core_score += 5
         elif 4 <= yoe < 5 or 9 < yoe <= 12:
             core_score += 2
+            
+        unique_companies = len(set(ch.get('company', '') for ch in career if ch.get('company')))
+        if unique_companies == 1 and yoe >= 5:
+            core_score -= 6  # never changed context in 5+ years
+        elif unique_companies == 2 and yoe >= 7:
+            core_score -= 3  # limited breadth for senior role
         
         # Title match bonus
         current_title = str(row.get('current_title', '')).lower()
