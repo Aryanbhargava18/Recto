@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import re
+import math
 import pickle
 import os
 import time
@@ -141,6 +142,23 @@ def score_candidates(df, weights=None):
         'sentence-transformers'
     ]
     
+    IR_DENSITY_SIGNALS = [
+        'bm25', 'dense retrieval', 'hybrid', 'faiss', 'hnsw', 'reranker',
+        'ndcg', 'mrr', 'learning-to-rank', 'sentence-transformer', 'bge',
+        'embedding drift', 'index refresh', 'a/b test', 'offline evaluation',
+        'sparse', 'bi-encoder', 'cross-encoder', 'vector index', 'ann search'
+    ]
+    
+    EXACT_TITLE_MATCH = [
+        'search engineer', 'recommendation systems engineer',
+        'information retrieval engineer', 'ranking engineer',
+        'search infrastructure engineer'
+    ]
+    STRONG_TITLE_MATCH = [
+        'nlp engineer', 'applied scientist', 'applied ml engineer',
+        'staff machine learning engineer', 'senior ai engineer'
+    ]
+    
     RELEVANT_ASSESSMENTS = [
         'Learning to Rank', 'Sentence Transformers', 'FAISS',
         'Vector Search', 'Semantic Search', 'Embeddings',
@@ -184,6 +202,7 @@ def score_candidates(df, weights=None):
         career = row.get('career_history', [])
         if not isinstance(career, list): career = []
         computed_ir_role_count = 0
+        total_ir_density = 0
         for ch in career:
             desc = (ch.get('description', '') + ' ' + ch.get('title', '')).lower()
             if any(kw in desc for kw in IR_TEMPLATES):
@@ -191,7 +210,13 @@ def score_candidates(df, weights=None):
                 prod_hits = sum(1 for p in PRODUCTION_SCALE_SIGNALS if p in desc)
                 if prod_hits >= 2:
                     core_score += 5
+                # IR density: how deeply IR was this role?
+                density = sum(1 for s in IR_DENSITY_SIGNALS if s in desc)
+                total_ir_density += min(density, 3)
         core_score += min(computed_ir_role_count, 4) * 10
+        # Density bonus ONLY for candidates with rare skills (amplifier, not substitute)
+        if rare_hits >= 1:
+            core_score += min(total_ir_density, 10)
         
         avg_tenure = compute_avg_tenure(career)
         if avg_tenure < 12:
@@ -219,6 +244,13 @@ def score_candidates(df, weights=None):
             core_score += 5
         elif 4 <= yoe < 5 or 9 < yoe <= 12:
             core_score += 2
+        
+        # Title match bonus
+        current_title = str(row.get('current_title', '')).lower()
+        if any(t in current_title for t in EXACT_TITLE_MATCH):
+            core_score += 4
+        elif any(t in current_title for t in STRONG_TITLE_MATCH):
+            core_score += 2
             
         # Tier-1 education
         tier_1_edu = False
@@ -229,7 +261,7 @@ def score_candidates(df, weights=None):
                     tier_1_edu = True
                     break
         if tier_1_edu:
-            core_score += 3
+            core_score += 1  # was 3
             
         # Services-only disqualifier
         services_regex = re.compile(r'(?i)\b(TCS|Infosys|Wipro|Accenture|Cognizant)\b')
@@ -286,29 +318,42 @@ def score_candidates(df, weights=None):
         if search_appearance_30d > 800 and saved_by_recruiters_30d < 5 and recruiter_response_rate < 0.2:
             behavioral_mult *= 0.50
             is_ghost = True
-            
-        behavioral_mult = max(behavioral_mult, 0.40)
         
-        # STEP 3: Saved-by-recruiters bonus
+        # avg_response_time_hours
         redrob = row.get('redrob_signals', {})
         if not isinstance(redrob, dict): redrob = {}
+        response_time = redrob.get('avg_response_time_hours', 999)
+        if response_time <= 12:
+            behavioral_mult *= 1.04
+        elif response_time <= 48:
+            behavioral_mult *= 1.02
+        elif response_time > 200:
+            behavioral_mult *= 0.94
+        
+        # offer_acceptance_rate
+        oar = redrob.get('offer_acceptance_rate', -1)
+        if oar > 0.7:
+            behavioral_mult *= 1.03
+        elif 0 <= oar < 0.3:
+            behavioral_mult *= 0.90
+            
+        # Tiered behavioral floor
+        if core_score >= 80:
+            behavioral_mult = max(behavioral_mult, 0.55)
+        else:
+            behavioral_mult = max(behavioral_mult, 0.40)
+            
+        # STEP 3: Saved-by-recruiters bonus (continuous log)
         saved_by_recruiters_30d = redrob.get('saved_by_recruiters_30d', 0)
-        saved_bonus = 0
-        if saved_by_recruiters_30d > 60:
-            saved_bonus = 18
-        elif saved_by_recruiters_30d > 30:
-            saved_bonus = 10
-        elif saved_by_recruiters_30d > 15:
-            saved_bonus = 6
-        elif saved_by_recruiters_30d > 5:
-            saved_bonus = 3
-        elif saved_by_recruiters_30d == 0:
+        if saved_by_recruiters_30d == 0:
             saved_bonus = -25
+        else:
+            saved_bonus = min(math.log1p(saved_by_recruiters_30d) * 4.0, 20)
+        # Cap: thin technical profile can't ride saves into top spots
+        if rare_hits <= 1 and computed_ir_role_count <= 2:
+            saved_bonus = min(saved_bonus, 10)
             
         # STEP 4: LinkedIn bonus
-        # Look at redrob_signals if needed, but since we didn't extract linkedin_connected, let's extract it safely
-        redrob = row.get('redrob_signals', {})
-        if not isinstance(redrob, dict): redrob = {}
         linkedin_connected = redrob.get('linkedin_connected', False)
         linkedin_bonus = 4 if linkedin_connected else 0
         
