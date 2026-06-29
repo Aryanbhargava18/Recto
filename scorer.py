@@ -159,17 +159,9 @@ def score_candidates(df, weights=None):
         'staff machine learning engineer', 'senior ai engineer'
     ]
     
-    FAANG_TIER = {
+    FAANG_SET = {
         'google', 'meta', 'apple', 'netflix', 'microsoft', 
-        'amazon', 'linkedin', 'openai', 'deepmind'
-    }
-    STRONG_INDIAN_PRODUCT = {
-        'swiggy', 'zomato', 'razorpay', 'cred', 'flipkart', 
-        'paytm', 'meesho', 'phonepe', 'zepto', 'dream11'
-    }
-    AI_STARTUP_TIER = {
-        'sarvam', 'yellow.ai', 'observe.ai', 'haptik', 
-        'krutrim', 'rephrase', 'verloop', 'mad street den'
+        'amazon', 'linkedin', 'openai', 'deepmind', 'salesforce'
     }
     
     RELEVANT_ASSESSMENTS = [
@@ -217,7 +209,6 @@ def score_candidates(df, weights=None):
         computed_ir_role_count = 0
         total_ir_density = 0
         pre_llm_ir = False
-        company_prestige_bonus = 0
         
         for ch in career:
             desc = (ch.get('description', '') + ' ' + ch.get('title', '')).lower()
@@ -237,15 +228,10 @@ def score_candidates(df, weights=None):
                 density = sum(1 for s in IR_DENSITY_SIGNALS if s in desc)
                 total_ir_density += min(density, 3)
                 
-                # Company prestige multiplier on IR roles only
-                if any(f in company for f in FAANG_TIER):
-                    company_prestige_bonus += 8
-                elif any(f in company for f in STRONG_INDIAN_PRODUCT):
-                    company_prestige_bonus += 4
-                elif any(f in company for f in AI_STARTUP_TIER):
-                    company_prestige_bonus += 2
+                # FAANG prestige ONLY when the role itself is IR
+                if any(f in company for f in FAANG_SET):
+                    core_score += 5
                     
-        core_score += min(company_prestige_bonus, 12)  # Cap prestige bonus
         core_score += min(computed_ir_role_count, 4) * 10
         # Density bonus ONLY for candidates with rare skills (amplifier, not substitute)
         if rare_hits >= 1:
