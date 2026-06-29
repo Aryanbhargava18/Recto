@@ -426,9 +426,9 @@ def score_candidates(df, weights=None):
         views = redrob.get('profile_views_received_30d', 0)
         ctr = views / appearances
         if ctr > 0.4 and appearances > 50:
-            core_score += 4
-        elif ctr > 0.2 and appearances > 30:
             core_score += 2
+        elif ctr > 0.2 and appearances > 30:
+            core_score += 1
             
         work_mode = redrob.get('preferred_work_mode', 'flexible')
         if work_mode == 'remote':
