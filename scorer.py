@@ -159,6 +159,19 @@ def score_candidates(df, weights=None):
         'staff machine learning engineer', 'senior ai engineer'
     ]
     
+    FAANG_TIER = {
+        'google', 'meta', 'apple', 'netflix', 'microsoft', 
+        'amazon', 'linkedin', 'openai', 'deepmind'
+    }
+    STRONG_INDIAN_PRODUCT = {
+        'swiggy', 'zomato', 'razorpay', 'cred', 'flipkart', 
+        'paytm', 'meesho', 'phonepe', 'zepto', 'dream11'
+    }
+    AI_STARTUP_TIER = {
+        'sarvam', 'yellow.ai', 'observe.ai', 'haptik', 
+        'krutrim', 'rephrase', 'verloop', 'mad street den'
+    }
+    
     RELEVANT_ASSESSMENTS = [
         'Learning to Rank', 'Sentence Transformers', 'FAISS',
         'Vector Search', 'Semantic Search', 'Embeddings',
@@ -179,7 +192,7 @@ def score_candidates(df, weights=None):
         matched_rare_skills = [rs for rs in rare_skills_lower if rs in candidate_skill_names]
         
         rare_hits = len(matched_rare_skills)
-        core_score += min(rare_hits, 8) * 12
+        core_score += min(rare_hits, 8) * 15  # Increased from 12 to 15 to assert technical depth dominance
         
         career_text_lower = str(row.get('career_description', '')).lower()
         
@@ -203,20 +216,43 @@ def score_candidates(df, weights=None):
         if not isinstance(career, list): career = []
         computed_ir_role_count = 0
         total_ir_density = 0
+        pre_llm_ir = False
+        company_prestige_bonus = 0
+        
         for ch in career:
             desc = (ch.get('description', '') + ' ' + ch.get('title', '')).lower()
+            start = str(ch.get('start_date', ''))
+            company = str(ch.get('company', '')).lower()
+            
             if any(kw in desc for kw in IR_TEMPLATES):
                 computed_ir_role_count += 1
+                
+                if start and start[:4] < '2022':
+                    pre_llm_ir = True
+                    
                 prod_hits = sum(1 for p in PRODUCTION_SCALE_SIGNALS if p in desc)
                 if prod_hits >= 2:
                     core_score += 5
                 # IR density: how deeply IR was this role?
                 density = sum(1 for s in IR_DENSITY_SIGNALS if s in desc)
                 total_ir_density += min(density, 3)
+                
+                # Company prestige multiplier on IR roles only
+                if any(f in company for f in FAANG_TIER):
+                    company_prestige_bonus += 8
+                elif any(f in company for f in STRONG_INDIAN_PRODUCT):
+                    company_prestige_bonus += 4
+                elif any(f in company for f in AI_STARTUP_TIER):
+                    company_prestige_bonus += 2
+                    
+        core_score += min(company_prestige_bonus, 12)  # Cap prestige bonus
         core_score += min(computed_ir_role_count, 4) * 10
         # Density bonus ONLY for candidates with rare skills (amplifier, not substitute)
         if rare_hits >= 1:
             core_score += min(total_ir_density, 10)
+            
+        if pre_llm_ir:
+            core_score += 5  # Scaled down from 7
         
         avg_tenure = compute_avg_tenure(career)
         if avg_tenure < 12:
@@ -251,6 +287,13 @@ def score_candidates(df, weights=None):
             core_score += 4
         elif any(t in current_title for t in STRONG_TITLE_MATCH):
             core_score += 2
+            
+        MANAGEMENT_DISQUALIFIERS = [
+            'chief', 'vp ', 'vice president', 'director of', 
+            'head of', 'cto', 'cpo', 'engineering manager'
+        ]
+        if any(m in current_title for m in MANAGEMENT_DISQUALIFIERS):
+            core_score -= 20  # JD explicit hard disqualifier
             
         # Tier-1 education
         tier_1_edu = False
@@ -353,7 +396,7 @@ def score_candidates(df, weights=None):
         if rare_hits <= 1 and computed_ir_role_count <= 2:
             saved_bonus = min(saved_bonus, 10)
             
-        # STEP 4: LinkedIn bonus
+        # STEP 4: LinkedIn & Redrob composite signals
         linkedin_connected = redrob.get('linkedin_connected', False)
         linkedin_bonus = 4 if linkedin_connected else 0
         
@@ -362,6 +405,14 @@ def score_candidates(df, weights=None):
             core_score += min(apps * 0.4, 6)
         elif apps == 0:
             core_score -= 2
+            
+        actively_searching = (
+            apps >= 5 and
+            open_to_work and
+            days_since_active <= 14
+        )
+        if actively_searching:
+            core_score += 6  # compound bonus beyond individual signals
             
         icr = redrob.get('interview_completion_rate', 0.5)
         if icr >= 0.8:
@@ -374,6 +425,36 @@ def score_candidates(df, weights=None):
             core_score += 2
         elif not redrob.get('verified_email', False) and not redrob.get('verified_phone', False):
             core_score -= 3
+            
+        connections = max(redrob.get('connection_count', 1), 1)
+        endorsements = redrob.get('endorsements_received', 0)
+        ratio = endorsements / connections
+        if ratio > 0.8:
+            core_score += 4
+        elif ratio > 0.4:
+            core_score += 2
+        elif ratio < 0.05 and connections > 100:
+            core_score -= 2
+            
+        appearances = max(search_appearance_30d, 1)
+        views = redrob.get('profile_views_received_30d', 0)
+        ctr = views / appearances
+        if ctr > 0.4 and appearances > 50:
+            core_score += 4
+        elif ctr > 0.2 and appearances > 30:
+            core_score += 2
+            
+        work_mode = redrob.get('preferred_work_mode', 'flexible')
+        if work_mode == 'remote':
+            behavioral_mult *= 0.93
+            
+        completeness = redrob.get('profile_completeness_score', 50)
+        if completeness >= 85:
+            core_score += 3
+        elif completeness >= 70:
+            core_score += 1
+        elif completeness < 40:
+            core_score -= 3
         
         # STEP 5: GitHub bonus
         github_activity_score = row.get('github_stars', 0)
@@ -385,6 +466,10 @@ def score_candidates(df, weights=None):
             github_bonus = 2
         elif github_activity_score >= 30:
             github_bonus = 1
+            
+        no_external_validation = (github_activity_score <= 0 and not linkedin_connected)
+        if no_external_validation and yoe >= 5:
+            core_score -= 10
             
         final_score = (core_score * behavioral_mult) + saved_bonus + linkedin_bonus + github_bonus
         
