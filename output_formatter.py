@@ -105,21 +105,6 @@ def generate_reasoning(row, score, rank):
         parts.append(f"1 IR role, no rare skills — adjacent candidate")
     else:
         parts.append("no direct IR role history — included on transferable skills")
-    
-    # IR depth
-    if ir_role_count >= 3:
-        parts.append(f"{ir_role_count} IR roles")
-    elif ir_role_count == 2:
-        parts.append("2 IR roles")
-    elif ir_role_count == 1:
-        parts.append("1 IR role")
-    else:
-        parts.append("no IR role history")
-        
-    # Rare skills
-    if rare_held:
-        parts.append(f"{len(rare_held)} rare IR skills: {', '.join(rare_held[:3])}")
-        
     # Assessments (only if relevant to IR)
     if rel_assessments:
         top_a = sorted(rel_assessments.items(), key=lambda x: -x[1])[:2]
