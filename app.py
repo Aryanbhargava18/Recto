@@ -618,7 +618,6 @@ with col_right:
         <div class="rp-label">Team</div>
         <div>Aryan Bhargava</div>
         <div>Harshit Kudhial</div>
-        <div style="margin-top:0.5rem;color:var(--border);">Redrob AI Hackathon 2025</div>
     </div>
     </div>
     """, unsafe_allow_html=True)

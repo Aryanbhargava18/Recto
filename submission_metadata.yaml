@@ -25,7 +25,7 @@ team_members:
 # ============================================================================
 github_repo: "https://github.com/harshitnub077/Recto"
 
-sandbox_link: "TODO"
+sandbox_link: "https://rectoo.streamlit.app"
 # Acceptable: HuggingFace Spaces, Streamlit Cloud, Replit, Colab, Docker
 
 reproduce_command: "python main.py --candidates <path_to_test_dataset.jsonl> --output ./results"
