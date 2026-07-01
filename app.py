@@ -213,7 +213,7 @@ section[data-testid="stSidebar"] { display: none; }
     font-size: 0.78rem;
     color: var(--text-1);
     line-height: 1.55;
-    max-width: 580px;
+    max-width: 100%;
 }
 .c-tags {
     display: flex;
@@ -421,7 +421,7 @@ def parse_signals(reasoning: str):
         signals.append((f"{n}D NOTICE", cls))
     return signals[:5]
 
-def snippet(text: str, max_len=160) -> str:
+def snippet(text: str, max_len=1000) -> str:
     t = re.sub(r'\s+', ' ', str(text)).strip()
     return t[:max_len] + "…" if len(t) > max_len else t
 
@@ -460,7 +460,7 @@ ctrl_left, ctrl_mid, ctrl_right, ctrl_dl = st.columns([3, 2, 2, 1])
 with ctrl_left:
     search = st.text_input("", placeholder="Search by ID or keyword…", label_visibility="collapsed")
 with ctrl_mid:
-    top_n = st.select_slider("", options=[10, 25, 50, 75, 100], value=25, label_visibility="collapsed")
+    top_n = st.select_slider("", options=[5, 10, 15, 20, 25, 50, 75, 100], value=25, label_visibility="collapsed")
 with ctrl_right:
     min_score = st.select_slider("", options=[0, 20, 40, 50, 60, 70, 80], value=0, label_visibility="collapsed",
                                   format_func=lambda x: f"Score ≥ {x}%")
