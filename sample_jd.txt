@@ -1,7 +1,0 @@
-Information Retrieval Engineer
-Requirements:
-- Deep experience with Search Engines like Elasticsearch, Solr, or OpenSearch.
-- Strong knowledge of Learning to Rank (LTR), LambdaMART, and BM25.
-- Familiarity with Vector Search, ANN, FAISS, and dense retrieval.
-- 5+ years of experience in backend or ML engineering.
-- Nice to have: E-commerce search background.

@@ -1,20 +1,14 @@
+# Environment
 .env
 .venv/
 __pycache__/
-*.pkl
-results/
-jd_cache.json
-rerank_cache.json
-jd_signals.json
 .DS_Store
 
-# Scratch / debug scripts
-trace.py
-check_missing.py
-validate_*.py
+# Large intermediate artifacts (reproducible via pipeline)
+*.pkl
+results/
+results_full/
+results_sherlock/
 
-# Scratch outputs
-top100.csv
-top100.md
-scored_candidates.pkl
-candidates.jsonl
+# Generated at runtime
+jd_signals.json

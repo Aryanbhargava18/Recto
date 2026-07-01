@@ -1,0 +1,89 @@
+# Redrob Hackathon — Submission Metadata
+# This file mirrors portal metadata as required by submission_spec Section 10.3.
+
+# ============================================================================
+# Team identity
+# ============================================================================
+team_name: "Recto"
+
+primary_contact:
+  name: "Aryan Bhargava"
+  email: "aryan.2024@nst.rishihood.edu.in"
+  phone: "7888609660"
+
+team_members:
+  - name: "Aryan Bhargava"
+    email: "aryan.2024@nst.rishihood.edu.in"
+    role: "Ai student"
+
+  - name: "Harshit Kudhial"
+    email: "harshitkudhial@gmail.com"
+    role: "Ai student"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/harshitnub077/Recto"
+
+sandbox_link: "TODO"
+# Acceptable: HuggingFace Spaces, Streamlit Cloud, Replit, Colab, Docker
+
+reproduce_command: "python main.py --candidates <path_to_test_dataset.jsonl> --output ./results"
+# Runs end-to-end within 5 minutes on CPU, 16GB RAM, no network.
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "MacBook"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.13"
+  os: "macOS"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: true
+  pre_computation_time_minutes: 3
+  pre_computation_description: |
+    TF-IDF sparse similarity matrix pre-computed via precompute_embeddings.py.
+    This generates a semantic_scores.pkl file used as an additive scoring boost.
+
+# ============================================================================
+# AI tools declaration
+# ============================================================================
+ai_tools_used:
+  - "Claude"
+  - "Cursor"
+  - "Gemini / Antigravity"
+
+ai_usage_summary: |
+  Used Claude and Gemini for architecture discussion, code review, and debugging.
+  Used Cursor for IDE autocomplete and refactoring.
+  No candidate data was sent to any LLM during ranking.
+  The ranking pipeline execution is fully deterministic with zero external API calls.
+
+# ============================================================================
+# Approach summary
+# ============================================================================
+methodology_summary: |
+  Hybrid heuristic + semantic ranker. Five-layer scoring pipeline:
+  (1) Hard-kill filters eliminate salary traps and honeypots.
+  (2) Core IR scoring uses rare-skill matching (BM25, Learning to Rank, etc.),
+      career history parsing with IR role counting, and anti-gaming coherence
+      ratios to penalize keyword stuffers.
+  (3) Behavioral multipliers adjust scores based on response rates, notice
+      periods, recruiter saves, and ghost detection.
+  (4) Pre-computed TF-IDF cosine similarity provides an additive semantic
+      boost without penalizing strong heuristic candidates.
+  (5) Deterministic sort by unified HYBRID_SCORE ensures zero score inversions.
+  Runtime: ~60s for 100K candidates on CPU. Peak RAM: ~4GB.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

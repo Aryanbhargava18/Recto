@@ -4,6 +4,9 @@ import re
 import os
 import pickle
 import numpy as np
+from rich.console import Console
+
+console = Console()
 
 # Configuration dictionary to make filter logic and thresholds tunable
 FILTER_CONFIG = {
@@ -52,20 +55,20 @@ def load_data(config):
     csv_path = config['input_csv']
     
     if os.path.exists(json_path):
-        print(f"Loading data from JSON: {json_path}")
+        console.print(f"[cyan]Loading data from JSON: {json_path}[/cyan]")
         try:
             df = pd.read_json(json_path)
         except ValueError:
             df = pd.read_json(json_path, lines=True)
     elif os.path.exists(csv_path):
-        print(f"Loading data from CSV fallback: {csv_path}")
+        console.print(f"[yellow]Loading data from CSV fallback: {csv_path}[/yellow]")
         df = pd.read_csv(csv_path)
     else:
         raise FileNotFoundError(f"Could not find {json_path} or {csv_path}. Please ensure the dataset exists.")
         
     # FLATTEN RAW DATASET SCHEMA
     if 'profile' in df.columns:
-        print("Flattening raw nested dataset schema...")
+        console.print("[cyan]Flattening raw nested dataset schema...[/cyan]")
         import datetime
         
         df['name'] = df['profile'].apply(lambda x: x.get('anonymized_name', '') if isinstance(x, dict) else '')
@@ -78,10 +81,29 @@ def load_data(config):
             return ' '.join([item.get('description', '') for item in history if isinstance(item, dict)])
         df['career_description'] = df.get('career_history', pd.Series([])).apply(extract_career)
         
+        def calc_career_span_months(history):
+            if not isinstance(history, list): return 0
+            return sum(item.get('duration_months', 0) for item in history if isinstance(item, dict))
+        df['career_span_months'] = df.get('career_history', pd.Series([])).apply(calc_career_span_months)
+        
         def extract_skills(skills):
             if not isinstance(skills, list): return []
             return [item.get('name', '') for item in skills if isinstance(item, dict)]
-        df['skills'] = df.get('skills', pd.Series([])).apply(extract_skills)
+        df['skills_list'] = df.get('skills', pd.Series([])).apply(extract_skills)
+        
+        # Preserve raw skill dicts for proficiency/duration scoring
+        df['raw_skills'] = df.get('skills', pd.Series([]))
+        
+        def check_skill_fabrication(skills):
+            if not isinstance(skills, list): return False
+            for s in skills:
+                if isinstance(s, dict):
+                    if s.get('proficiency') == 'expert' and s.get('duration_months', -1) == 0:
+                        return True
+            return False
+        df['skill_fabrication_flag'] = df.get('skills', pd.Series([])).apply(check_skill_fabrication)
+        
+        df['skills'] = df['skills_list']
         
         if 'redrob_signals' in df.columns:
             def safe_get(d, key, default=None):
@@ -104,8 +126,8 @@ def load_data(config):
                 if not date_str: return 999
                 try:
                     dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-                    return (datetime.datetime(2026, 6, 1) - dt).days
-                except:
+                    return (datetime.datetime.now() - dt).days
+                except Exception:
                     return 999
             df['active_days_since_last_login'] = df['redrob_signals'].apply(calc_active_days)
     
@@ -122,6 +144,7 @@ def apply_filters(df, config):
         'removed_noise': 0,
         'removed_honeypot': 0,
         'removed_non_technical': 0,
+        'removed_notice_period': 0,
         'removed_location_mismatch': 0,
         'flagged_services_company': 0,
         'final_count': 0
@@ -149,13 +172,15 @@ def apply_filters(df, config):
         summary['removed_noise'] = condition_b.sum()
         df = df[~condition_b].copy()
         
-    # c. expert_skill_flag=True AND duration_months=0 (honeypot flag)
-    # The flag might not exist, but let's check safely
-    if 'expert_skill_flag' in df.columns and 'duration_months' in df.columns:
-        condition_c = (df['expert_skill_flag'] == True) & (df['duration_months'] == 0)
-        summary['removed_honeypot'] = condition_c.sum()
-        df = df[~condition_c].copy()
-        
+    # c. Skill fabrication flag (expert + 0 duration) and Timeline impossibility
+    condition_fabrication = df.get('skill_fabrication_flag', pd.Series([False]*len(df))) == True
+    
+    # Timeline impossibility: YoE > career span + 2 years
+    condition_timeline = (df.get('duration_months', 0) / 12.0) > ((df.get('career_span_months', 0) / 12.0) + 2.0)
+    
+    condition_c = condition_fabrication | condition_timeline
+    summary['removed_honeypot'] = condition_c.sum()
+    df = df[~condition_c].copy()
     # d. title is non-technical AND no IR keyword in career
     if 'title' in df.columns and 'career_description' in df.columns:
         non_tech_regex = '|'.join(config['non_technical_titles'])
@@ -167,6 +192,12 @@ def apply_filters(df, config):
         condition_d = is_non_tech & (~has_ir_keyword)
         summary['removed_non_technical'] = condition_d.sum()
         df = df[~condition_d].copy()
+        
+    # d2. Notice period > 90 days (explicit JD disqualifier)
+    if 'notice_period_days' in df.columns:
+        condition_notice = df['notice_period_days'] > 90
+        summary['removed_notice_period'] = condition_notice.sum()
+        df = df[~condition_notice].copy()
         
     # e. Hard disqualify: outside India + unwilling to relocate
     if 'country' in df.columns and 'willing_to_relocate' in df.columns:
@@ -192,17 +223,18 @@ def print_summary(summary):
     """
     3. Prints a summary of total removed by each rule and candidates remaining.
     """
-    print("\n--- Filter Summary ---")
-    print(f"Initial Candidate Count: {summary['initial_count']}")
-    print(f"Removed by (a) Salary Inversion Trap: {summary['removed_salary_inversion']}")
-    print(f"Removed by (b) Non-IR Noise/Empty Career: {summary['removed_noise']}")
-    print(f"Removed by (c) Honeypot Flag (Expert + 0 exp): {summary['removed_honeypot']}")
-    print(f"Removed by (d) Non-Technical Title + No IR keyword: {summary['removed_non_technical']}")
-    print(f"Removed by (e) Location Mismatch (India/No-Relo/Onsite): {summary['removed_location_mismatch']}")
-    print("----------------------")
-    print(f"Flagged with Services Company Penalty ({FILTER_CONFIG['services_penalty']} pts): {summary['flagged_services_company']}")
-    print(f"Final Candidates Remaining: {summary['final_count']}")
-    print("----------------------\n")
+    console.print("\n[bold cyan]--- Filter Summary ---[/bold cyan]")
+    console.print(f"Initial Candidate Count: [yellow]{summary['initial_count']}[/yellow]")
+    console.print(f"Removed by (a) Salary Inversion Trap: [red]{summary['removed_salary_inversion']}[/red]")
+    console.print(f"Removed by (b) Non-IR Noise/Empty Career: [red]{summary['removed_noise']}[/red]")
+    console.print(f"Removed by (c) Honeypot Flag (Fabrication/Timeline): [red]{summary['removed_honeypot']}[/red]")
+    console.print(f"Removed by (d) Non-Technical Title + No IR keyword: [red]{summary['removed_non_technical']}[/red]")
+    console.print(f"Removed by (e) Notice Period > 90 days: [red]{summary['removed_notice_period']}[/red]")
+    console.print(f"Removed by (f) Location Mismatch (India/No-Relo/Onsite): [red]{summary['removed_location_mismatch']}[/red]")
+    console.print("[cyan]----------------------[/cyan]")
+    console.print(f"Flagged with Services Company Penalty ({FILTER_CONFIG['services_penalty']} pts): [magenta]{summary['flagged_services_company']}[/magenta]")
+    console.print(f"Final Candidates Remaining: [bold green]{summary['final_count']}[/bold green]")
+    console.print("[cyan]----------------------[/cyan]\n")
 
 def get_sample(n=50, pickle_file=FILTER_CONFIG['output_pkl']):
     """
@@ -232,10 +264,10 @@ def main():
         output_path = FILTER_CONFIG['output_pkl']
         with open(output_path, 'wb') as f:
             pickle.dump(filtered_df, f)
-        print(f"Filtered dataset saved to {output_path}")
+        console.print(f"[bold green]Filtered dataset saved to {output_path}[/bold green]")
         
     except FileNotFoundError as e:
-        print(f"Error: {e}")
+        console.print(f"[bold red]Error: {e}[/bold red]")
         # Note: In a real scenario you might create a mock dataset here to test if file is absent
 
 if __name__ == "__main__":

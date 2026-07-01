@@ -1,74 +1,67 @@
 # Recto — Ranking candidates the way a great recruiter would
 
-Recto is an AI-powered candidate ranking system built to process huge datasets and surgically extract the perfect hires for complex technical roles (specifically Information Retrieval and Search Engineering). 
+Recto is an advanced, multi-layered pipeline designed to identify the absolute best Information Retrieval (IR) and Search Engineering candidates from a dataset of 100,000+ profiles. 
+
+It was built strictly under the hackathon constraints: **Zero external APIs (no LLMs), < 5 minutes execution time, <= 16GB RAM, pure CPU execution.**
 
 ## Architecture
 
 ```text
-[ Raw Data: 100k Candidates ]
+[ Raw Data: 100,000 Candidates ]
          │
          ▼
  ┌─────────────────────┐
- │ PHASE 1: Data Load  │──▶ Fallback handling, JSON/CSV parsing
+ │ PHASE 1: Data Load  │──▶ Fallback handling, JSON schema flattening
  └─────────────────────┘
          │
          ▼
  ┌─────────────────────┐
- │ PHASE 2: Hard Kills │──▶ Salary traps, Honeypots, Template Noise
+ │ PHASE 2: Hard Kills │──▶ Salary traps, Honeypots, Keyword-stuffing penalties
  └─────────────────────┘
          │
          ▼
  ┌─────────────────────┐
- │ PHASE 3: Rule Score │──▶ Rare Skills, Gold Patterns, CV Traps
+ │ PHASE 3: Core Score │──▶ Rare Skills (BM25, Pinecone), Trajectory, IR Density
  └─────────────────────┘
          │
          ▼
  ┌─────────────────────┐
- │ PHASE 4: Multiplier │──▶ Behavioral signals, Tiebreaker logic
+ │ PHASE 4: Semantic   │──▶ TF-IDF Sparse Similarity Matrix (Cosine Similarity)
  └─────────────────────┘
          │
          ▼
  ┌─────────────────────┐
- │ PHASE 5: Reranker   │──▶ Gemini 2.5 Flash Semantic AI (Batched)
+ │ PHASE 5: Rank Sort  │──▶ Deterministic Hybrid Score Sort (Zero Inversions)
  └─────────────────────┘
          │
          ▼
-[ Final Top 10 Shortlist ]
+[ Final Top 100 Shortlist ]
 ```
 
-## Quick Start
+## Quick Start (Evaluation Command)
+
+As required by the submission spec, the pipeline runs entirely locally with a single command:
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Setup your Gemini API Key
-echo "GEMINI_API_KEY=your_api_key_here" > .env
-
-# 3. Run the full end-to-end pipeline (results saved to /results)
-python3 main.py --jd sample_jd.txt --candidates candidates.json --output results/
+# 2. Run the full end-to-end pipeline
+python main.py --candidates /path/to/candidates.jsonl --output results/
 ```
-*(To run instantly without API calls for testing, add the `--skip-rerank` flag).*
+*(Note: the `--jd` parameter is optional and defaults to the internal deterministic IR JD logic. Do not worry if you don't supply it.)*
 
 ## Key Innovations
 
-* **Hard Kill Filters**: Discards 99% of noise instantly (e.g., salary inversion traps, honeypot 0-month experts).
-* **3-Layer Scoring**: 
-    1. **Core IR**: Deep keyword vectorization favoring rare skills (FAISS, LambdaMART).
-    2. **CV Traps**: Penalizes candidates with distractor skills (YOLO/CNN) over IR depth.
-    3. **Behavioral**: Multipliers for active status and response rates.
-* **Semantic Reranking via Gemini**: Uses Google's `gemini-2.5-flash` model to act as a seasoned technical recruiter, extracting a `semantic_score` to build a robust `HYBRID_SCORE`.
-* **Free-Tier Optimized**: Smart batching (5 candidates per prompt) and local `.json` caching means you can rerank hundreds of candidates while staying strictly under the 15 RPM / 1,500 RPD free tier limits.
-
-## Results
-**Top 10 candidates identified from 100,000 with 98% precision vs keyword baseline.**
-*Crucial Insight*: Only 162 real candidates exist among 100,000 — the rest are distractor noise, salary honeypots, or career template copies. Recto successfully isolated them all.
+* **Anti-Gaming Architecture**: Uses Coherence Ratios to penalize keyword stuffers. If someone dumps 15 buzzwords into a 1-sentence career description, their score collapses.
+* **The "3+ IR Role" Boost**: A systemic fix that prevents junior candidates with keyword-stuffed "skills" arrays from outscoring 10-year veterans who have actually built IR systems at scale.
+* **Semantic Safety Net**: A pre-computed TF-IDF Cosine Similarity engine that acts purely as an additive boost to catch candidates the heuristics might have missed. 
+* **Zero Score Inversions**: We enforce a strict deterministic mathematical rank sort, meaning `score_at_rank_1 >= score_at_rank_2` natively, with no artificial tiering required.
 
 ## Tech Stack
-* **Python 3**
+* **Python 3.11+**
 * **Pandas / Numpy** (for lightning-fast vectorized scoring)
-* **Google Generative AI SDK** (Gemini 2.5 Flash)
+* **Scikit-Learn** (for TF-IDF Sparse Matrices and Cosine Similarity)
 * **Rich** (for beautiful CLI UX)
 
 ---
-*Built with ❤️ for the Hackathon by Harshitru*

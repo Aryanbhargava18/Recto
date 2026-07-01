@@ -1,5 +1,7 @@
 import json
+from rich.console import Console
 
+console = Console()
 # 1. Hard-coded known facts for Sherlock hackathon project
 KNOWN_REQUIRED = [
     'production embeddings', 'sentence-transformers', 'BGE', 'E5', 'vector database', 
@@ -63,14 +65,14 @@ def print_summary_table(merged):
             lines.append(", ".join(current))
         return lines
 
-    print("+" + "-"*78 + "+")
-    print(f"| {'JD SIGNAL SUMMARY (DETERMINISTIC)':^76} |")
-    print("+" + "-"*78 + "+")
+    console.print("[cyan]+[/cyan]" + "[cyan]-[/cyan]"*78 + "[cyan]+[/cyan]")
+    console.print(f"[cyan]|[/cyan] [bold]{'JD SIGNAL SUMMARY (DETERMINISTIC)':^76}[/bold] [cyan]|[/cyan]")
+    console.print("[cyan]+[/cyan]" + "[cyan]-[/cyan]"*78 + "[cyan]+[/cyan]")
     
     yoe = f"{merged.get('yoe_min', '?')} - {merged.get('yoe_max', '?')}"
-    print(f"| Seniority: {str(merged['seniority']).upper():<25} | Domain: {str(merged['domain']).upper():<29} |")
-    print(f"| YOE: {yoe:<31} | Product Co: {str(merged['is_product_company']):<25} |")
-    print("+" + "-"*78 + "+")
+    console.print(f"[cyan]|[/cyan] Seniority: [yellow]{str(merged['seniority']).upper():<25}[/yellow] | Domain: [yellow]{str(merged['domain']).upper():<29}[/yellow] [cyan]|[/cyan]")
+    console.print(f"[cyan]|[/cyan] YOE: [yellow]{yoe:<31}[/yellow] | Product Co: [yellow]{str(merged['is_product_company']):<25}[/yellow] [cyan]|[/cyan]")
+    console.print("[cyan]+[/cyan]" + "[cyan]-[/cyan]"*78 + "[cyan]+[/cyan]")
     
     sections = [
         ("REQUIRED SKILLS:", merged['required_skills']),
@@ -80,12 +82,12 @@ def print_summary_table(merged):
     ]
     
     for title, items in sections:
-        print(f"| {title:<76} |")
-        print("+" + "-"*78 + "+")
+        console.print(f"[cyan]|[/cyan] [bold green]{title:<76}[/bold green] [cyan]|[/cyan]")
+        console.print("[cyan]+[/cyan]" + "[cyan]-[/cyan]"*78 + "[cyan]+[/cyan]")
         for line in wrap_text(", ".join(items)):
-            print(f"| {line:<76} |")
-        print("+" + "-"*78 + "+")
-    print("\n -> Complete signals saved to 'jd_signals.json'")
+            console.print(f"[cyan]|[/cyan] {line:<76} [cyan]|[/cyan]")
+        console.print("[cyan]+[/cyan]" + "[cyan]-[/cyan]"*78 + "[cyan]+[/cyan]")
+    console.print("\n [bold green]-> Complete signals saved to 'jd_signals.json'[/bold green]")
 
 if __name__ == "__main__":
     sample_jd = (
@@ -93,6 +95,6 @@ if __name__ == "__main__":
         "(hybrid). Requires 5-9 years of experience. You will build and scale our hybrid "
         "search, embedding models, and ranking systems to match candidates with roles."
     )
-    print("Parsing JD for Sherlock Ranker (Deterministic)...")
+    console.print("[cyan]Parsing JD for Sherlock Ranker (Deterministic)...[/cyan]")
     merged = parse_jd(sample_jd)
     print_summary_table(merged)

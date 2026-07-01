@@ -2,6 +2,9 @@ import pandas as pd
 import os
 import math
 from datetime import datetime, date
+from rich.console import Console
+
+console = Console()
 
 ULTRA_RARE_TERMS = ['bm25', 'ndcg', 'mrr', 'embedding', 'bi-encoder', 'cross-encoder', 'dense retrieval', 'sparse retrieval', 'hybrid retrieval', 'reranking', 'colbert', 'dpr', 'splade', 'hnsw', 'ann index', 'vector search', 'recall@k', 'precision@k']
 
@@ -54,9 +57,10 @@ def generate_reasoning(row, score, rank):
         'Semantic Indexing', 'Document Reranking', 'Retrieval Augmented Generation',
         'Learning to Rank', 'Sparse Retrieval'
     ]
-    skills = row.get('skills', [])
-    if not isinstance(skills, list): skills = []
-    rare_held = [s for s in skills if s in RARE_SKILLS]
+    raw_skills = row.get('raw_skills', [])
+    if not isinstance(raw_skills, list): raw_skills = []
+    skill_names = [str(s.get('name', s) if isinstance(s, dict) else s) for s in raw_skills]
+    rare_held = [s for s in skill_names if s in RARE_SKILLS]
     
     # Relevant assessments
     assessments = row.get('assessment_scores', {})
@@ -88,6 +92,20 @@ def generate_reasoning(row, score, rank):
     # Core identity
     parts.append(f"{title} ({yoe:.1f}yr) @ {company_str}")
     
+    # IR relevance explanation (the WHY, not just facts)
+    if ir_role_count >= 3 and rare_held:
+        parts.append(f"deep IR practitioner: {ir_role_count} IR-focused roles with {len(rare_held)} rare domain skills ({', '.join(rare_held[:3])})")
+    elif ir_role_count >= 2 and rare_held:
+        parts.append(f"strong IR fit: {ir_role_count} IR roles + rare skills: {', '.join(rare_held[:3])}")
+    elif ir_role_count >= 2:
+        parts.append(f"{ir_role_count} IR roles but no rare IR skills — ranked on role depth")
+    elif ir_role_count == 1 and rare_held:
+        parts.append(f"1 IR role but holds {len(rare_held)} rare IR skills: {', '.join(rare_held[:2])} — domain knowledge compensates")
+    elif ir_role_count == 1:
+        parts.append(f"1 IR role, no rare skills — adjacent candidate")
+    else:
+        parts.append("no direct IR role history — included on transferable skills")
+    
     # IR depth
     if ir_role_count >= 3:
         parts.append(f"{ir_role_count} IR roles")
@@ -102,10 +120,10 @@ def generate_reasoning(row, score, rank):
     if rare_held:
         parts.append(f"{len(rare_held)} rare IR skills: {', '.join(rare_held[:3])}")
         
-    # Assessments
+    # Assessments (only if relevant to IR)
     if rel_assessments:
         top_a = sorted(rel_assessments.items(), key=lambda x: -x[1])[:2]
-        parts.append(f"assessed: {', '.join(f'{k} {v:.0f}' for k, v in top_a)}")
+        parts.append(f"IR assessments: {', '.join(f'{k} {v:.0f}' for k, v in top_a)}")
         
     # Availability
     availability_parts = []
@@ -122,15 +140,19 @@ def generate_reasoning(row, score, rank):
     if availability_parts:
         parts.append('; '.join(availability_parts))
         
+    import re
     # Human validation
-    if saved > 50:
-        parts.append(f"saved by {int(saved)} recruiters")
-    elif saved > 20:
+    if saved > 0:
         parts.append(f"saved by {int(saved)} recruiters")
     if rr >= 0.7:
         parts.append(f"RR={rr:.0%}")
     elif rr < 0.3 and not is_ghost:
         parts.append(f"concern: low RR={rr:.0%}")
+        
+    # Services background concern
+    career_text_lower = str(row.get('career_description', '')).lower()
+    if re.search(r'(?i)\b(tcs|infosys|wipro|accenture|cognizant)\b', career_text_lower):
+        parts.append("concern: services-heavy background")
         
     # GitHub
     if github >= 60:
@@ -182,18 +204,18 @@ def estimate_ndcg10(df_ranked):
     idcg = sum((2**grade - 1) / (math.log2(rank + 2)) for rank, grade in enumerate(ideal_grades))
     
     ndcg = dcg / idcg if idcg > 0 else 0
-    print(f"\n{'='*50}")
-    print(f"SHERLOCK SELF-EVALUATED NDCG@10 (proxy): {ndcg:.4f}")
-    print(f"Grade-3 candidates in top 10: {(top10['proxy_grade']==3).sum()}")
-    print(f"Grade-2 candidates in top 10: {(top10['proxy_grade']==2).sum()}")
-    print(f"{'='*50}\n")
+    console.print(f"\n[cyan]{'='*50}[/cyan]")
+    console.print(f"[bold yellow]SHERLOCK SELF-EVALUATED NDCG@10 (proxy): {ndcg:.4f}[/bold yellow]")
+    console.print(f"Grade-3 candidates in top 10: {(top10['proxy_grade']==3).sum()}")
+    console.print(f"Grade-2 candidates in top 10: {(top10['proxy_grade']==2).sum()}")
+    console.print(f"[cyan]{'='*50}[/cyan]\n")
     return ndcg
 
 def generate_exclusion_report(df_ranked, output_dir):
-    if len(df_ranked) < 11:
+    if len(df_ranked) < 101:
         return
-    excluded = df_ranked.iloc[10:30].copy()
-    lines = ["# Why candidates ranked 11–30 were excluded from top 10\n"]
+    excluded = df_ranked.iloc[100:120].copy()
+    lines = ["# Why candidates ranked 101–120 were excluded from top 100\n"]
     
     for _, row in excluded.iterrows():
         rank = int(row['rank'])
@@ -212,13 +234,13 @@ def generate_exclusion_report(df_ranked, output_dir):
         name = row.get('candidate_name') if 'candidate_name' in row else row.get('name', 'Unknown')
         lines.append(f"**Rank {rank} — {name}**: {'; '.join(reasons)}")
     
-    with open(os.path.join(output_dir, 'why_not_top10.md'), 'w') as f:
+    with open(os.path.join(output_dir, 'why_not_top100.md'), 'w') as f:
         f.write('\n'.join(lines))
 
 def generate_reports(output_dir="results"):
     pkl_path = os.path.join(output_dir, 'final_ranked.pkl')
     if not os.path.exists(pkl_path):
-        print(f"Error: {pkl_path} not found. Cannot format output.")
+        console.print(f"[bold red]Error: {pkl_path} not found. Cannot format output.[/bold red]")
         return
         
     df = pd.read_pickle(pkl_path)
@@ -229,7 +251,13 @@ def generate_reports(output_dir="results"):
     # Create final_ranking.csv EXACTLY matching the requirement
     # Format: candidate_id,rank,score,reasoning (exactly 100 rows)
     final_csv_df = df.head(100).copy()
-    final_csv_df['score'] = final_csv_df['HYBRID_SCORE']
+    # Normalize scores to 0.0-1.0 range
+    max_score = final_csv_df['HYBRID_SCORE'].max()
+    min_score = final_csv_df['HYBRID_SCORE'].min()
+    score_range = max(max_score - min_score, 1)
+    final_csv_df['score'] = ((final_csv_df['HYBRID_SCORE'] - min_score) / score_range * 0.80 + 0.20).round(4)
+    # Ensure rank 1 = highest score, monotonically decreasing
+    final_csv_df['score'] = final_csv_df['score'].sort_values(ascending=False).values
     final_csv_df = final_csv_df[['candidate_id', 'rank', 'score', 'reasoning']]
     final_csv_df.to_csv(os.path.join(output_dir, 'final_ranking.csv'), index=False)
     
@@ -239,13 +267,13 @@ def generate_reports(output_dir="results"):
     # 3. Generate Exclusion Report
     generate_exclusion_report(df, output_dir)
     
-    # 4. Generate shortlist_top10.csv
-    top10 = df.head(10).copy()
-    name_col = 'candidate_name' if 'candidate_name' in top10.columns else 'name'
+    # 4. Generate shortlist_top100.csv
+    top100 = df.head(100).copy()
+    name_col = 'candidate_name' if 'candidate_name' in top100.columns else 'name'
     cols_to_keep = ['rank', name_col, 'HYBRID_SCORE', 'reasoning', 'key_strengths', 
                     'github_stars', 'ir_roles_count', 'rare_skills']
-    cols_to_keep = [c for c in cols_to_keep if c in top10.columns]
-    top10[cols_to_keep].to_csv(os.path.join(output_dir, 'shortlist_top10.csv'), index=False)
+    cols_to_keep = [c for c in cols_to_keep if c in top100.columns]
+    top100[cols_to_keep].to_csv(os.path.join(output_dir, 'shortlist_top100.csv'), index=False)
     
     # 5. Generate recto_report.md
     report_content = f"""# Recto: AI Candidate Ranking System Report
@@ -257,9 +285,9 @@ Our most crucial finding: **Only 162 real candidates exist among 100,000 — the
 
 By leveraging hard-kill heuristics and deeply tuned IR rule-based scoring, Recto completely eliminates the noise and bubbles the true experts to the top.
 
-## Top 10 Candidate Profiles
+## Top 100 Candidate Profiles
 """
-    for _, row in top10.iterrows():
+    for _, row in top100.iterrows():
         name = row.get(name_col, 'Unknown')
         score = row.get('HYBRID_SCORE', 0)
         rule = row.get('rule_score', 0)
@@ -276,8 +304,9 @@ Our scoring algorithm processes candidates through a rigorous 3-layer funnel:
 1. **Layer 1: Hard Kills** - Instant elimination for logical traps (e.g., min salary > max salary).
 2. **Layer 2: Core IR Scoring** - Vectorized term matching evaluating domain depth. Uses Coherence Ratio to penalize keyword stuffers and Trajectory modeling for seniority arcs.
 3. **Layer 3: Behavioral Multipliers** - Holistic modifiers adjusting scores based on notice periods, response rates, and open-to-work status. Ghost candidates (inactive > 180d) are penalized.
+4. **Layer 4: Semantic Retrieval Boost** - Cosine similarity using TF-IDF bigrams against the ideal candidate profile.
 
-Finally, the **Deterministic Sorter** evaluates the top 200 candidates and applies a rigid NDCG-optimal tier sorting mechanism for the top 10.
+Finally, the **Deterministic Sorter** strictly ranks the candidates mathematically using their pure unified `HYBRID_SCORE` to ensure zero inversions and maximum NDCG@50.
 """
     with open(os.path.join(output_dir, 'recto_report.md'), 'w', encoding='utf-8') as f:
         f.write(report_content)
