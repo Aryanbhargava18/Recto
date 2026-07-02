@@ -10,6 +10,9 @@
 
 **[Live Demo →](https://rectoo.streamlit.app)**
 
+<br>
+<img src="assets/logo.png" width="250" alt="Recto AI Candidate Intelligence">
+
 ---
 
 ## The Problem
