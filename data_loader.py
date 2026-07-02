@@ -165,9 +165,19 @@ def apply_filters(df, config):
         summary['removed_noise'] = condition_b.sum()
         df = df[~condition_b].copy()
         
-    # Removed aggressive honeypot filter that killed valid candidates
-    condition_c = pd.Series([False]*len(df))
-    summary['removed_honeypot'] = 0
+    # c. Mathematically Impossible Skill Timeline (Skill duration > Total YoE + 2 years)
+    def has_impossible_skills(row):
+        yoe_months = row.get('years_of_experience', 0) * 12
+        skills = row.get('raw_skills', [])
+        if not isinstance(skills, list): return False
+        for s in skills:
+            if isinstance(s, dict):
+                if s.get('duration_months', 0) > yoe_months + 24:
+                    return True
+        return False
+        
+    condition_c = df.apply(has_impossible_skills, axis=1)
+    summary['removed_honeypot'] = condition_c.sum()
     
     # d. title is non-technical AND no IR keyword in career
     if 'title' in df.columns and 'career_description' in df.columns:
