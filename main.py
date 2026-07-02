@@ -41,6 +41,10 @@ def main():
         "--output", type=str, default="results",
         help="Output directory for ranked CSV and reports"
     )
+    parser.add_argument(
+        "--skip-rerank", action="store_true",
+        help="Skip LLM reranking (Note: Recto is 100% deterministic, so this is a no-op)"
+    )
     args = parser.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
