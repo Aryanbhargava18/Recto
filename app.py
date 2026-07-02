@@ -799,21 +799,19 @@ with col_side:
     max_count = max(int(((df['score'] >= lo) & (df['score'] < hi)).sum())
                     for lo, hi, _ in buckets) or 1
 
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-label">Score Distribution</div>', unsafe_allow_html=True)
+    dist_html = '<div class="sidebar-section"><div class="sidebar-label">Score Distribution</div>'
     for lo, hi, lbl in reversed(buckets):
         count = int(((df['score'] >= lo) & (df['score'] < hi)).sum())
         bar_pct = int(count / max_count * 100)
-        st.markdown(f"""
-        <div class="dist-row">
-            <div class="dist-label">{lbl}%</div>
-            <div class="dist-bar-wrap">
-                <div class="dist-bar" style="width:{bar_pct}%;"></div>
-            </div>
-            <div class="dist-count">{count}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        dist_html += f"""<div class="dist-row">
+    <div class="dist-label">{lbl}%</div>
+    <div class="dist-bar-wrap">
+        <div class="dist-bar" style="width:{bar_pct}%;"></div>
+    </div>
+    <div class="dist-count">{count}</div>
+</div>"""
+    dist_html += '</div>'
+    st.markdown(dist_html, unsafe_allow_html=True)
 
     # Load dynamic stats if available
     import json
@@ -835,9 +833,7 @@ with col_side:
         desc1, desc2 = "Schema flatten, 100K → 30K valid", "Salary traps, ghost profiles, honeypots"
 
     # Pipeline visualization
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-label">Pipeline Flow</div>', unsafe_allow_html=True)
-    st.markdown('<div class="pipeline-flow">', unsafe_allow_html=True)
+    pipe_html = '<div class="sidebar-section"><div class="sidebar-label">Pipeline Flow</div><div class="pipeline-flow">'
     for title, desc, active in [
         ("Ingest & Filter", desc1, True),
         ("Hard Kill", desc2, True),
@@ -846,33 +842,30 @@ with col_side:
         ("Deterministic Sort", "Zero inversions, tie-break by ID", True),
     ]:
         dot_cls = "pipe-dot active" if active else "pipe-dot"
-        st.markdown(f"""
-        <div class="pipe-step">
-            <div class="{dot_cls}"></div>
-            <div class="pipe-text">
-                <div class="pipe-title">{title}</div>
-                <div class="pipe-desc">{desc}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown('</div></div>', unsafe_allow_html=True)
+        pipe_html += f"""<div class="pipe-step">
+    <div class="{dot_cls}"></div>
+    <div class="pipe-text">
+        <div class="pipe-title">{title}</div>
+        <div class="pipe-desc">{desc}</div>
+    </div>
+</div>"""
+    pipe_html += '</div></div>'
+    st.markdown(pipe_html, unsafe_allow_html=True)
 
     # Top 5 leaderboard
-    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-label">Top 5 Leaderboard</div>', unsafe_allow_html=True)
+    ldr_html = '<div class="sidebar-section"><div class="sidebar-label">Top 5 Leaderboard</div>'
     for _, row in df.head(5).iterrows():
         r = int(row["rank"])
         sp = round(row["score"] * 100, 1)
         nm = str(row.get("name", row["candidate_id"]))[:20]
         accent = ' style="color:var(--amber);"' if r == 1 else ""
-        st.markdown(f"""
-        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid var(--border);">
-            <span style="font-family:var(--mono);font-size:0.7rem;color:var(--text-2);width:18px;">#{r}</span>
-            <span style="font-size:0.7rem;color:var(--text-1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{nm}</span>
-            <span style="font-family:var(--mono);font-size:0.7rem;font-weight:600;"{accent}>{sp}%</span>
-        </div>
-        """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+        ldr_html += f"""<div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid var(--border);">
+    <span style="font-family:var(--mono);font-size:0.7rem;color:var(--text-2);width:18px;">#{r}</span>
+    <span style="font-size:0.7rem;color:var(--text-1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{nm}</span>
+    <span style="font-family:var(--mono);font-size:0.7rem;font-weight:600;"{accent}>{sp}%</span>
+</div>"""
+    ldr_html += '</div>'
+    st.markdown(ldr_html, unsafe_allow_html=True)
 
     # Team
     st.markdown("""
