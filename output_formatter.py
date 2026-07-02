@@ -289,43 +289,42 @@ def generate_reports(output_dir="results"):
         
     df = pd.read_pickle(pkl_path)
     
-    # Generate unique fact-grounded reasoning
-    df['reasoning'] = df.apply(lambda row: generate_reasoning(row, row['HYBRID_SCORE'], row['rank']), axis=1)
-    
-    # Create final_ranking.csv EXACTLY matching the requirement
-    # Format: candidate_id,rank,score,reasoning (exactly 100 rows)
-    final_csv_df = df.head(100).copy()
-    
     # Normalize scores to a realistic confidence curve (e.g. 74% to 96%) using log transform
+    top100 = df.head(100).copy()
     import numpy as np
-    log_scores = np.log1p(np.maximum(final_csv_df['HYBRID_SCORE'], 0))
+    log_scores = np.log1p(np.maximum(top100['HYBRID_SCORE'], 0))
     max_log = log_scores.max()
     min_log = log_scores.min()
     log_range = max(max_log - min_log, 1e-6)
     
     # Scale from 0.0 to 1.0, then map to 0.74 - 0.96
     normalized_log = (log_scores - min_log) / log_range
-    final_csv_df['score'] = (normalized_log * 0.22 + 0.74).round(4)
+    top100['score'] = (normalized_log * 0.22 + 0.74).round(4)
+    
     # Sort by score DESC then candidate_id ASC (spec tie-break rule).
     # Re-assign rank from this ordering to guarantee validator passes.
-    final_csv_df = final_csv_df.sort_values(
+    top100 = top100.sort_values(
         ['score', 'candidate_id'],
         ascending=[False, True]
     ).reset_index(drop=True)
-    final_csv_df['rank'] = range(1, len(final_csv_df) + 1)
-    final_csv_df = final_csv_df[['candidate_id', 'rank', 'score', 'reasoning']]
+    top100['rank'] = range(1, len(top100) + 1)
+    
+    # Generate unique fact-grounded reasoning using the final deterministic rank
+    top100['reasoning'] = top100.apply(lambda row: generate_reasoning(row, row['score'], row['rank']), axis=1)
+
+    # 1. Generate final_ranking.csv EXACTLY matching the requirement
+    final_csv_df = top100[['candidate_id', 'rank', 'score', 'reasoning']]
     final_csv_df.to_csv(os.path.join(output_dir, 'final_ranking.csv'), index=False)
     
     # 2. Self-evaluate NDCG
-    estimate_ndcg10(df)
+    estimate_ndcg10(top100)
     
     # 3. Generate Exclusion Report
     generate_exclusion_report(df, output_dir)
     
     # 4. Generate shortlist_top100.csv
-    top100 = df.head(100).copy()
     name_col = 'candidate_name' if 'candidate_name' in top100.columns else 'name'
-    cols_to_keep = ['rank', name_col, 'HYBRID_SCORE', 'reasoning', 'key_strengths', 
+    cols_to_keep = ['rank', name_col, 'HYBRID_SCORE', 'score', 'reasoning', 'key_strengths', 
                     'github_stars', 'ir_roles_count', 'rare_skills']
     cols_to_keep = [c for c in cols_to_keep if c in top100.columns]
     top100[cols_to_keep].to_csv(os.path.join(output_dir, 'shortlist_top100.csv'), index=False)
