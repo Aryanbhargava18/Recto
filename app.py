@@ -529,6 +529,7 @@ section[data-testid="stSidebar"] { display: none; }
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data():
+    # Cache busted!
     base_path = "results/final_ranking.csv"
     rich_path = "results/shortlist_top100.csv"
     if os.path.exists(base_path) and os.path.exists(rich_path):
@@ -674,7 +675,7 @@ ir_heavy = int(filtered['ir_roles_count'].fillna(0).ge(2).sum()) if 'ir_roles_co
 
 hero_placeholder.markdown(f"""
 <div class="hero">
-    <div class="hero-title">Top 100 candidates, <span class="highlight">ranked.</span></div>
+    <div class="hero-title">Top {len(filtered)} candidates, <span class="highlight">ranked.</span></div>
     <div class="hero-subtitle">
         Deterministic 5-layer pipeline scores 100K candidates in under 3 minutes.
         Zero LLMs. Zero API calls. Pure heuristic engineering.
