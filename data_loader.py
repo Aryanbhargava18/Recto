@@ -157,20 +157,19 @@ def apply_filters(df, config):
     if 'salary_min' in df.columns and 'salary_max' in df.columns:
         condition_a = df['salary_min'] > df['salary_max']
         summary['removed_salary_inversion'] = condition_a.sum()
-        # df = df[~condition_a].copy()  # RELAXED for demo
+        df = df[~condition_a].copy()
     
     # b. career_description is null/empty OR matches any IR/search template pattern (non-IR noise)
     if 'career_description' in df.columns:
         # Check null or empty
         is_null_empty = df['career_description'].isnull() | (df['career_description'].str.strip() == '')
         
-        # Check noise patterns (RELAXED for demo)
-        # noise_regex = '|'.join(config['noise_patterns'])
-        # is_noise = df['career_description'].str.contains(noise_regex, na=False, regex=True, case=False)
-        is_noise = False
+        # Check noise patterns
+        noise_regex = '|'.join(config['noise_patterns'])
+        is_noise = df['career_description'].str.contains(noise_regex, na=False, regex=True, case=False)
         
         condition_b = is_null_empty | is_noise
-        summary['removed_noise'] = is_null_empty.sum()
+        summary['removed_noise'] = condition_b.sum()
         df = df[~condition_b].copy()
         
     # c. Skill fabrication flag (expert + 0 duration) and Timeline impossibility
@@ -181,7 +180,7 @@ def apply_filters(df, config):
     
     condition_c = condition_fabrication | condition_timeline
     summary['removed_honeypot'] = condition_c.sum()
-    # df = df[~condition_c].copy()
+    df = df[~condition_c].copy()
     
     # d. title is non-technical AND no IR keyword in career
     if 'title' in df.columns and 'career_description' in df.columns:
@@ -193,20 +192,20 @@ def apply_filters(df, config):
         
         condition_d = is_non_tech & (~has_ir_keyword)
         summary['removed_non_technical'] = condition_d.sum()
-        # df = df[~condition_d].copy()
+        df = df[~condition_d].copy()
         
     # d2. Notice period > 90 days (explicit JD disqualifier)
     if 'notice_period_days' in df.columns:
         condition_notice = df['notice_period_days'] > 90
         summary['removed_notice_period'] = condition_notice.sum()
-        # df = df[~condition_notice].copy()
+        df = df[~condition_notice].copy()
         
     # e. Hard disqualify: outside India + unwilling to relocate
     if 'country' in df.columns and 'willing_to_relocate' in df.columns:
         is_outside_india = (df['country'].str.lower() != 'india') & (df['country'].str.strip() != '')
         condition_e = is_outside_india & (df['willing_to_relocate'] == False)
         summary['removed_location_mismatch'] = condition_e.sum()
-        # df = df[~condition_e].copy()
+        df = df[~condition_e].copy()
         
     # f. services_company flag -> assign -20 pts penalty (don't eliminate, just flag)
     # We initialize the penalty score column
