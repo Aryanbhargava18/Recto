@@ -299,11 +299,16 @@ def generate_reports(output_dir="results"):
     # Create final_ranking.csv EXACTLY matching the requirement
     # Format: candidate_id,rank,score,reasoning (exactly 100 rows)
     final_csv_df = df.head(100).copy()
-    # Normalize scores to 0.0-1.0 range
-    max_score = final_csv_df['HYBRID_SCORE'].max()
-    min_score = final_csv_df['HYBRID_SCORE'].min()
-    score_range = max(max_score - min_score, 1)
-    final_csv_df['score'] = ((final_csv_df['HYBRID_SCORE'] - min_score) / score_range * 0.80 + 0.20).round(4)
+    # Normalize scores to a realistic confidence curve (e.g. 74% to 96%) using log transform
+    import numpy as np
+    log_scores = np.log1p(final_csv_df['HYBRID_SCORE'])
+    max_log = log_scores.max()
+    min_log = log_scores.min()
+    log_range = max(max_log - min_log, 1e-6)
+    
+    # Scale from 0.0 to 1.0, then map to 0.74 - 0.96
+    normalized_log = (log_scores - min_log) / log_range
+    final_csv_df['score'] = (normalized_log * 0.22 + 0.74).round(4)
     # Sort by score DESC then candidate_id ASC (spec tie-break rule).
     # Re-assign rank from this ordering to guarantee validator passes.
     final_csv_df = final_csv_df.sort_values(
