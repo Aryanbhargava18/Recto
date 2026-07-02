@@ -484,14 +484,15 @@ section[data-testid="stSidebar"] { display: none; }
 }
 
 /* ── Streamlit overrides ── */
+[data-testid="InputInstructions"] { display: none !important; }
 .stTextInput input {
-    background: var(--surface-2) !important;
+    background: var(--surface-2) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%23a0a0a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>') no-repeat 14px center !important;
     border: 1px solid var(--border-hi) !important;
     border-radius: 100px !important;
     color: var(--text-0) !important;
     font-family: var(--mono) !important;
     font-size: 0.72rem !important;
-    padding: 0.5rem 1rem !important;
+    padding: 0.5rem 1rem 0.5rem 2.4rem !important;
     transition: var(--transition) !important;
 }
 .stTextInput input:focus {
@@ -571,9 +572,9 @@ def extract_signals(row):
         cls = "tag-green" if int(ir_count) >= 3 else "tag-amber"
         signals.append((f"{int(ir_count)} IR", cls))
     
-    # Learning to Rank
-    if "learning to rank" in reasoning.lower():
-        signals.append(("LTR", "tag-purple"))
+    # Advanced IR
+    if re.search(r'learning to rank|colbert|cross-encoder|rerank|dense retrieval', reasoning, re.I):
+        signals.append(("ADVANCED IR", "tag-purple"))
     
     # GitHub
     gh = row.get('github_stars', -1)

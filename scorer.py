@@ -57,13 +57,13 @@ IR_TEMPLATES = [
     'most relevant results',
     'ranking system',
     'search infrastructure',
-    'learning-to-rank',
+    'approximate nearest neighbor',
     'sentence-transformers'
 ]
 
 IR_DENSITY_SIGNALS = [
     'bm25', 'dense retrieval', 'hybrid', 'faiss', 'hnsw', 'reranker',
-    'ndcg', 'mrr', 'learning-to-rank', 'sentence-transformer', 'bge',
+    'ndcg', 'mrr', 'sentence-transformer', 'bge',
     'embedding drift', 'index refresh', 'a/b test', 'offline evaluation',
     'sparse', 'bi-encoder', 'cross-encoder', 'vector index', 'ann search'
 ]

@@ -102,11 +102,12 @@ def generate_reasoning(row, score, rank):
     if not isinstance(raw_skills, list): raw_skills = []
     skill_names = [str(s.get('name', s) if isinstance(s, dict) else s) for s in raw_skills]
     RARE_SKILLS = [
+        'Dense Retrieval', 'Document Reranking', 'Semantic Indexing',
         'Information Retrieval Systems', 'Search Infrastructure', 'Ranking Systems',
-        'Text Encoders', 'Dense Retrieval', 'Indexing Algorithms',
+        'BM25', 'Embeddings', 'RAG', 'Vector Search',
+        'Text Encoders', 'Indexing Algorithms', 'Retrieval Augmented Generation',
         'Embedding Models', 'Passage Retrieval', 'Query Understanding',
-        'Semantic Indexing', 'Document Reranking', 'Retrieval Augmented Generation',
-        'Learning to Rank', 'Sparse Retrieval'
+        'Sparse Retrieval', 'Learning to Rank'
     ]
     rare_held = [s for s in skill_names if s in RARE_SKILLS]
 
