@@ -17,7 +17,7 @@ import re
 
 st.set_page_config(
     page_title="Recto · Candidate Intelligence",
-    page_icon="◈",
+    page_icon="assets/logo.png",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -624,11 +624,9 @@ hero_placeholder = st.empty()
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTROLS
 # ─────────────────────────────────────────────────────────────────────────────
-ctrl_left, ctrl_mid, ctrl_f1, ctrl_f2, ctrl_f3, ctrl_f4, ctrl_dl = st.columns([2.0, 2.0, 1.3, 1.2, 1.4, 1.2, 0.7])
+ctrl_left, ctrl_f1, ctrl_f2, ctrl_f3, ctrl_f4, ctrl_dl = st.columns([2.5, 1.3, 1.2, 1.4, 1.2, 0.7])
 with ctrl_left:
     search = st.text_input("", placeholder="Search name, ID, or keyword…", label_visibility="collapsed")
-with ctrl_mid:
-    top_n = st.slider("Show Top Candidates", min_value=1, max_value=100, value=min(100, len(df)) if len(df) > 0 else 100)
 with ctrl_f1:
     fast_notice = st.checkbox("Immediate (≤15d)", value=False)
 with ctrl_f2:
@@ -665,8 +663,8 @@ if deep_ir:
 if high_resp:
     filtered = filtered[filtered['reasoning'].str.contains(r'(?i)highly responsive', na=False)]
 
-# Apply Top N filter last
-filtered = filtered.head(top_n)
+# Limit to top 100 max (as per hackathon rules)
+filtered = filtered.head(100)
 
 # Update Hero Metrics dynamically
 top_score = round(filtered['score'].max() * 100, 1) if not filtered.empty else 0.0
