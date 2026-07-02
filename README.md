@@ -17,7 +17,7 @@
 
 ## The Problem
 
-The Redrob AI Hackathon dataset contains **100,000 candidate profiles** — but roughly **80 are honeypot fakes**: keyword-stuffed profiles designed to fool naive retrieval systems. Let too many honeypots into your top 100 and your submission is disqualified.
+The Redrob AI Hackathon dataset contains **100,000 candidate profiles** — but a significant portion are noise profiles: keyword-stuffed profiles designed to fool naive retrieval systems. Let too many honeypots into your top 100 and your submission is disqualified.
 
 The constraints are brutal:
 - ≤ 5 minutes end-to-end

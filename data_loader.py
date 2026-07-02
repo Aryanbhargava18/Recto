@@ -94,14 +94,7 @@ def load_data(config):
         # Preserve raw skill dicts for proficiency/duration scoring
         df['raw_skills'] = df.get('skills', pd.Series([]))
         
-        def check_skill_fabrication(skills):
-            if not isinstance(skills, list): return False
-            for s in skills:
-                if isinstance(s, dict):
-                    if s.get('proficiency') == 'expert' and s.get('duration_months', -1) == 0:
-                        return True
-            return False
-        df['skill_fabrication_flag'] = df.get('skills', pd.Series([])).apply(check_skill_fabrication)
+        # Removed skill fabrication flag as it was too aggressive on default values
         
         df['skills'] = df['skills_list']
         
@@ -172,15 +165,9 @@ def apply_filters(df, config):
         summary['removed_noise'] = condition_b.sum()
         df = df[~condition_b].copy()
         
-    # c. Skill fabrication flag (expert + 0 duration) and Timeline impossibility
-    condition_fabrication = df.get('skill_fabrication_flag', pd.Series([False]*len(df))) == True
-    
-    # Timeline impossibility: YoE > career span + 2 years
-    condition_timeline = (df.get('duration_months', 0) / 12.0) > ((df.get('career_span_months', 0) / 12.0) + 2.0)
-    
-    condition_c = condition_fabrication | condition_timeline
-    summary['removed_honeypot'] = condition_c.sum()
-    df = df[~condition_c].copy()
+    # Removed aggressive honeypot filter that killed valid candidates
+    condition_c = pd.Series([False]*len(df))
+    summary['removed_honeypot'] = 0
     
     # d. title is non-technical AND no IR keyword in career
     if 'title' in df.columns and 'career_description' in df.columns:

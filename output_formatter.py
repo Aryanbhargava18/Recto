@@ -215,14 +215,9 @@ def generate_reasoning(row, score, rank):
         elif rank <= 80:
             sentence3 = "Key gap: " + "; ".join(concerns[:2]) + "."
         else:
-            sentence3 = "Ranked in the lower tier because " + "; ".join(concerns[:2]) + "; included to fill the top-100 shortlist."
+            sentence3 = "Key gap: " + "; ".join(concerns[:2]) + "."
     else:
-        if rank >= 80:
-            sentence3 = "Included in the lower ranks to complete the top-100 shortlist despite limited IR-specific signals."
-        elif rank >= 50:
-            sentence3 = "A reasonable but not standout candidate for this IR-focused role."
-        else:
-            sentence3 = ""
+        sentence3 = ""
 
     # ── Assemble ──
     parts = [sentence1]
@@ -300,6 +295,7 @@ def generate_reports(output_dir="results"):
     # Create final_ranking.csv EXACTLY matching the requirement
     # Format: candidate_id,rank,score,reasoning (exactly 100 rows)
     final_csv_df = df.head(100).copy()
+    
     # Normalize scores to a realistic confidence curve (e.g. 74% to 96%) using log transform
     import numpy as np
     log_scores = np.log1p(np.maximum(final_csv_df['HYBRID_SCORE'], 0))
