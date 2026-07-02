@@ -25,32 +25,37 @@ st.set_page_config(
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 /* ── Tokens ── */
 :root {
     --amber:      #e8b84b;
     --amber-dim:  #c49a30;
     --amber-faint:#e8b84b18;
-    --surface-0:  #080808;
-    --surface-1:  #0f0f0f;
-    --surface-2:  #161616;
+    --surface-0:  #050505;
+    --surface-1:  rgba(20, 20, 20, 0.6);
+    --surface-2:  rgba(30, 30, 30, 0.4);
     --surface-3:  #1e1e1e;
-    --border:     #232323;
-    --border-hi:  #2e2e2e;
-    --text-0:     #f2f2f2;
-    --text-1:     #a0a0a0;
-    --text-2:     #555555;
+    --border:     rgba(255, 255, 255, 0.08);
+    --border-hi:  rgba(255, 255, 255, 0.15);
+    --text-0:     #ffffff;
+    --text-1:     #b0b0b0;
+    --text-2:     #666666;
     --green:      #4ade80;
     --red:        #f87171;
     --blue:       #60a5fa;
     --mono: 'IBM Plex Mono', monospace;
-    --sans: 'Inter', sans-serif;
+    --sans: 'Space Grotesk', sans-serif;
 }
 
 /* ── Base ── */
 html, body, [class*="css"] { font-family: var(--sans) !important; }
-.stApp { background: var(--surface-0) !important; }
+.stApp { 
+    background: radial-gradient(circle at 15% 50%, rgba(30, 25, 10, 1), #050505 40%),
+                radial-gradient(circle at 85% 30%, rgba(10, 20, 35, 1), #050505 50%) !important;
+    background-size: cover;
+    background-attachment: fixed;
+}
 #MainMenu, footer, header { visibility: hidden; }
 section[data-testid="stSidebar"] { display: none; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
@@ -62,9 +67,11 @@ section[data-testid="stSidebar"] { display: none; }
     align-items: center;
     justify-content: space-between;
     padding: 0 2.5rem;
-    height: 52px;
+    height: 60px;
     border-bottom: 1px solid var(--border);
-    background: var(--surface-0);
+    background: rgba(5, 5, 5, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     position: sticky;
     top: 0;
     z-index: 100;
@@ -101,7 +108,7 @@ section[data-testid="stSidebar"] { display: none; }
 .left-panel {
     border-right: 1px solid var(--border);
     padding: 2rem 1.5rem;
-    background: var(--surface-0);
+    background: transparent;
 }
 .panel-label {
     font-family: var(--mono);
@@ -161,9 +168,9 @@ section[data-testid="stSidebar"] { display: none; }
     justify-content: space-between;
     padding: 1.25rem 2rem;
     border-bottom: 1px solid var(--border);
-    background: var(--surface-0);
+    background: transparent;
     position: sticky;
-    top: 52px;
+    top: 60px;
     z-index: 99;
 }
 .list-title {
@@ -174,20 +181,37 @@ section[data-testid="stSidebar"] { display: none; }
 }
 .list-meta { font-size: 0.7rem; color: var(--text-2); font-family: var(--mono); }
 
-/* ── Candidate row ── */
+/* ── Candidate row (Glassmorphism Cards) ── */
 .c-row {
     display: grid;
     grid-template-columns: 56px 1fr auto;
     align-items: start;
-    padding: 1.1rem 2rem;
-    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 2rem;
+    margin: 0 2rem 1rem 2rem;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
     cursor: default;
-    transition: background 0.12s;
-    gap: 1rem;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    gap: 1.5rem;
 }
-.c-row:hover { background: var(--surface-1); }
-.c-row.top3 { background: var(--amber-faint); }
-.c-row.top3:hover { background: #e8b84b22; }
+.c-row:hover { 
+    background: var(--surface-2); 
+    border-color: var(--border-hi);
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+}
+.c-row.top3 { 
+    background: rgba(232, 184, 75, 0.05); 
+    border-color: rgba(232, 184, 75, 0.2);
+}
+.c-row.top3:hover { 
+    background: rgba(232, 184, 75, 0.1); 
+    border-color: rgba(232, 184, 75, 0.4);
+}
 
 .c-rank {
     font-family: var(--mono);
@@ -289,7 +313,7 @@ section[data-testid="stSidebar"] { display: none; }
 /* ── Right panel ── */
 .right-panel {
     padding: 1.5rem;
-    background: var(--surface-0);
+    background: transparent;
 }
 .rp-section { margin-bottom: 2rem; }
 .rp-label {
