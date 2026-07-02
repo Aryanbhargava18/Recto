@@ -43,7 +43,7 @@ def main():
     )
     parser.add_argument(
         "--skip-rerank", action="store_true",
-        help="Skip LLM reranking (Note: Recto is 100% deterministic, so this is a no-op)"
+        help="Skip LLM reranking (Note: Recto is 100%% deterministic, so this is a no-op)"
     )
     args = parser.parse_args()
 
