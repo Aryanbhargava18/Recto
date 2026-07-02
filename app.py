@@ -663,8 +663,7 @@ ctrl_left, ctrl_mid, ctrl_f1, ctrl_f2, ctrl_f3, ctrl_f4, ctrl_dl = st.columns([2
 with ctrl_left:
     search = st.text_input("", placeholder="Search name, ID, or keyword…", label_visibility="collapsed")
 with ctrl_mid:
-    max_n = max(10, len(df))
-    top_n = st.slider("Show Top Candidates", min_value=1, max_value=max_n, value=min(100, max_n))
+    top_n = st.slider("Show Top Candidates", min_value=1, max_value=100, value=min(100, len(df)) if len(df) > 0 else 100)
 with ctrl_f1:
     fast_notice = st.checkbox("Immediate (≤15d)", value=False)
 with ctrl_f2:
