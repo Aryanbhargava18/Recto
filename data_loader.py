@@ -167,7 +167,7 @@ def apply_filters(df, config):
         
     # c. Mathematically Impossible Skill Timeline (Skill duration > Total YoE + 2 years)
     def has_impossible_skills(row):
-        yoe_months = row.get('years_of_experience', 0) * 12
+        yoe_months = row.get('duration_months', 0)
         skills = row.get('raw_skills', [])
         if not isinstance(skills, list): return False
         for s in skills:
@@ -178,6 +178,7 @@ def apply_filters(df, config):
         
     condition_c = df.apply(has_impossible_skills, axis=1)
     summary['removed_honeypot'] = condition_c.sum()
+    df = df[~condition_c].copy()
     
     # d. title is non-technical AND no IR keyword in career
     if 'title' in df.columns and 'career_description' in df.columns:
