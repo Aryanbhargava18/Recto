@@ -527,7 +527,7 @@ section[data-testid="stSidebar"] { display: none; }
 # ─────────────────────────────────────────────────────────────────────────────
 # DATA
 # ─────────────────────────────────────────────────────────────────────────────
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_data():
     # Cache busted!
     base_path = "results/final_ranking.csv"
