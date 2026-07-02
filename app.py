@@ -663,13 +663,17 @@ st.markdown(f"""
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTROLS
 # ─────────────────────────────────────────────────────────────────────────────
-ctrl_left, ctrl_f1, ctrl_f2, ctrl_dl = st.columns([3.5, 1.5, 1.5, 1])
+ctrl_left, ctrl_f1, ctrl_f2, ctrl_f3, ctrl_f4, ctrl_dl = st.columns([2.5, 1.3, 1.2, 1.4, 1.2, 0.7])
 with ctrl_left:
-    search = st.text_input("", placeholder="Search by name, ID, or keyword…", label_visibility="collapsed")
+    search = st.text_input("", placeholder="Search name, ID, or keyword…", label_visibility="collapsed")
 with ctrl_f1:
-    faang_only = st.checkbox("FAANG+ Only", value=False)
+    fast_notice = st.checkbox("Immediate (≤15d)", value=False)
 with ctrl_f2:
-    fast_notice = st.checkbox("Notice ≤ 30 Days", value=False)
+    tier1_only = st.checkbox("Tier-1 Tech", value=False)
+with ctrl_f3:
+    deep_ir = st.checkbox("Deep IR (2+ roles)", value=False)
+with ctrl_f4:
+    high_resp = st.checkbox("High Response", value=False)
 with ctrl_dl:
     st.download_button("↓ CSV", data=df.to_csv(index=False).encode("utf-8"),
                        file_name="recto_ranking.csv", mime="text/csv")
@@ -684,12 +688,19 @@ if search:
         filtered['reasoning'].str.contains(search, case=False, na=False)
     ]
 
-if faang_only:
-    faang_pattern = r'(?i)\b(Google|Meta|Apple|Netflix|Microsoft|Amazon|LinkedIn|OpenAI|DeepMind|Salesforce)\b'
-    filtered = filtered[filtered['reasoning'].str.contains(faang_pattern, na=False)]
+if tier1_only:
+    tier1_pattern = r'(?i)\b(Google|Meta|Apple|Netflix|Microsoft|Amazon|LinkedIn|OpenAI|DeepMind|Salesforce|Uber|Airbnb|Stripe|Flipkart|Zomato|Swiggy|Razorpay)\b'
+    filtered = filtered[filtered['reasoning'].str.contains(tier1_pattern, na=False)]
 
 if fast_notice:
-    filtered = filtered[filtered['reasoning'].str.contains(r'15-day notice|30-day notice|immediate', case=False, na=False)]
+    filtered = filtered[filtered['reasoning'].str.contains(r'15-day notice|immediate', case=False, na=False)]
+
+if deep_ir:
+    deep_ir_pattern = r'(?i)\b([2-9] ir-relevant|[2-9] search-focused|[2-9] roles involving search|deep ir expertise)\b'
+    filtered = filtered[filtered['reasoning'].str.contains(deep_ir_pattern, na=False)]
+
+if high_resp:
+    filtered = filtered[filtered['reasoning'].str.contains(r'(?i)highly responsive', na=False)]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2-COLUMN: Candidates + Sidebar
