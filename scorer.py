@@ -436,7 +436,12 @@ def score_candidates(df, weights=None, semantic_scores_map=None):
             core_score += 2
             
         if any(m in current_title for m in MANAGEMENT_DISQUALIFIERS):
-            core_score -= 20  # JD explicit hard disqualifier
+            # Hands-on Exemption: If they have high GitHub activity or explicitly mention coding, waive the penalty.
+            gh_stars = row.get('github_stars', 0)
+            if pd.isna(gh_stars): gh_stars = 0
+            is_hands_on = (gh_stars >= 30) or bool(re.search(r'\b(hands-on|wrote code|coded|implemented|architected)\b', career_text_lower))
+            if not is_hands_on:
+                core_score -= 20  # JD explicit hard disqualifier
             
         # Tier-1 education
         tier_1_edu = False

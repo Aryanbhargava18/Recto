@@ -663,26 +663,33 @@ st.markdown(f"""
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTROLS
 # ─────────────────────────────────────────────────────────────────────────────
-ctrl_left, ctrl_mid, ctrl_right, ctrl_dl = st.columns([3, 2, 2, 1])
+ctrl_left, ctrl_f1, ctrl_f2, ctrl_dl = st.columns([3.5, 1.5, 1.5, 1])
 with ctrl_left:
     search = st.text_input("", placeholder="Search by name, ID, or keyword…", label_visibility="collapsed")
-with ctrl_mid:
-    top_n = st.select_slider("", options=[10, 20, 25, 50, 75, 100], value=25, label_visibility="collapsed")
-with ctrl_right:
-    min_score = st.select_slider("", options=[0, 20, 40, 50, 60, 70, 80], value=0,
-                                  label_visibility="collapsed",
-                                  format_func=lambda x: f"Score ≥ {x}%")
+with ctrl_f1:
+    faang_only = st.checkbox("FAANG+ Only", value=False)
+with ctrl_f2:
+    fast_notice = st.checkbox("Notice ≤ 30 Days", value=False)
 with ctrl_dl:
     st.download_button("↓ CSV", data=df.to_csv(index=False).encode("utf-8"),
                        file_name="recto_ranking.csv", mime="text/csv")
 
 # Apply filters
 filtered = df.copy()
-filtered = filtered[filtered["score"] >= min_score / 100]
+
 if search:
-    mask = filtered.apply(lambda r: search.lower() in str(r.values).lower(), axis=1)
-    filtered = filtered[mask]
-filtered = filtered.head(top_n)
+    filtered = filtered[
+        filtered['name'].str.contains(search, case=False, na=False) |
+        filtered['candidate_id'].str.contains(search, case=False, na=False) |
+        filtered['reasoning'].str.contains(search, case=False, na=False)
+    ]
+
+if faang_only:
+    faang_pattern = r'(?i)\b(Google|Meta|Apple|Netflix|Microsoft|Amazon|LinkedIn|OpenAI|DeepMind|Salesforce)\b'
+    filtered = filtered[filtered['reasoning'].str.contains(faang_pattern, na=False)]
+
+if fast_notice:
+    filtered = filtered[filtered['reasoning'].str.contains(r'15-day notice|30-day notice|immediate', case=False, na=False)]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2-COLUMN: Candidates + Sidebar
@@ -797,13 +804,32 @@ with col_side:
         """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # Load dynamic stats if available
+    import json
+    import os
+    stats_path = "results/pipeline_stats.json"
+    if os.path.exists(stats_path):
+        try:
+            with open(stats_path, 'r') as f:
+                stats = json.load(f)
+            total = stats.get('initial_count', '100K')
+            valid = stats.get('final_count', '30K')
+            noise = stats.get('removed_noise', '40K')
+            traps = stats.get('removed_salary_inversion', 0) + stats.get('removed_honeypot', 0)
+            desc1 = f"Schema flatten, {total} → {valid} valid"
+            desc2 = f"Salary traps ({traps}), noise ({noise}) dropped"
+        except Exception:
+            desc1, desc2 = "Schema flatten, 100K → 30K valid", "Salary traps, ghost profiles, honeypots"
+    else:
+        desc1, desc2 = "Schema flatten, 100K → 30K valid", "Salary traps, ghost profiles, honeypots"
+
     # Pipeline visualization
     st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
     st.markdown('<div class="sidebar-label">Pipeline Flow</div>', unsafe_allow_html=True)
     st.markdown('<div class="pipeline-flow">', unsafe_allow_html=True)
     for title, desc, active in [
-        ("Ingest & Filter", "Schema flatten, 100K → 30K valid", True),
-        ("Hard Kill", "Salary traps, ghost profiles, honeypots", True),
+        ("Ingest & Filter", desc1, True),
+        ("Hard Kill", desc2, True),
         ("IR Depth Score", "Career parsing, rare skill matching", True),
         ("Semantic Boost", "TF-IDF cosine similarity", True),
         ("Deterministic Sort", "Zero inversions, tie-break by ID", True),

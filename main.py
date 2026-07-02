@@ -71,6 +71,11 @@ def main():
             f"[green]✔ Step 1: Loaded & Filtered ({time.time()-t0:.2f}s) "
             f"| Valid candidates: {summary['final_count']}[/green]"
         ))
+        
+        import json
+        clean_summary = {k: int(v) for k, v in summary.items()}
+        with open(os.path.join(args.output, 'pipeline_stats.json'), 'w') as f:
+            json.dump(clean_summary, f)
 
         # ── Step 2: Parse JD ───────────────────────────────────────
         task2 = progress.add_task("[cyan]Step 2: Parsing Job Description...", total=None)

@@ -24,7 +24,8 @@ def precompute_semantic_scores(input_pkl='results/filtered_candidates.pkl', outp
         "Ranking Systems Dense Retrieval Sparse Retrieval BM25 TF-IDF "
         "vector search Learning to Rank LTR sentence transformers bi-encoders cross-encoders "
         "Elasticsearch FAISS Pinecone Milvus Weaviate Qdrant "
-        "Connecting users relevant information scale billions documents"
+        "Connecting users relevant information scale billions documents "
+        "discovery algorithm matching engine recommendation core query understanding"
     )
     
     # Prepare candidate text blobs
