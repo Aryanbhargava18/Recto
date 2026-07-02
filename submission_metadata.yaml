@@ -28,18 +28,18 @@ github_repo: "https://github.com/harshitnub077/Recto"
 sandbox_link: "https://rectoo.streamlit.app"
 # Acceptable: HuggingFace Spaces, Streamlit Cloud, Replit, Colab, Docker
 
-reproduce_command: "python main.py --candidates <path_to_test_dataset.jsonl> --output ./results"
-# Runs end-to-end within 5 minutes on CPU, 16GB RAM, no network.
+reproduce_command: "python main.py --candidates ./candidates.jsonl --output ./results"
+# Runs end-to-end within 3 minutes on CPU, 16GB RAM, no network.
 
 # ============================================================================
 # Compute environment
 # ============================================================================
 compute:
-  platform: "MacBook"
+  platform: "MacBook Air M2"
   cpu_cores: 8
   ram_gb: 16
   python_version: "3.13"
-  os: "macOS"
+  os: "macOS 15 Sequoia"
   uses_gpu_for_inference: false
   has_network_during_ranking: false
   pre_computation_required: true
@@ -66,17 +66,18 @@ ai_usage_summary: |
 # Approach summary
 # ============================================================================
 methodology_summary: |
-  Hybrid heuristic + semantic ranker. Five-layer scoring pipeline:
-  (1) Hard-kill filters eliminate salary traps and honeypots.
-  (2) Core IR scoring uses rare-skill matching (BM25, Learning to Rank, etc.),
-      career history parsing with IR role counting, and anti-gaming coherence
-      ratios to penalize keyword stuffers.
-  (3) Behavioral multipliers adjust scores based on response rates, notice
-      periods, recruiter saves, and ghost detection.
+  Deterministic, rule-based ranker with pre-computed TF-IDF semantic boost.
+  Five-layer scoring pipeline:
+  (1) Hard-kill filters eliminate salary traps and honeypot keyword stuffers.
+  (2) Core IR scoring parses career history for actual retrieval roles,
+      applies rare-skill matching (BM25, Learning to Rank, ColBERT, etc.),
+      and uses a coherence ratio to penalize keyword stuffers.
+  (3) Behavioral multipliers weight response rates, notice periods,
+      recruiter saves, and ghost detection.
   (4) Pre-computed TF-IDF cosine similarity provides an additive semantic
-      boost without penalizing strong heuristic candidates.
-  (5) Deterministic sort by unified HYBRID_SCORE ensures zero score inversions.
-  Runtime: ~60s for 100K candidates on CPU. Peak RAM: ~4GB.
+      boost without overriding strong heuristic candidates.
+  (5) Deterministic sort by unified HYBRID_SCORE ensures zero inversions.
+  Total runtime: ~3 minutes for 100K candidates on CPU. Peak RAM: ~4GB.
 
 # ============================================================================
 # Declarations

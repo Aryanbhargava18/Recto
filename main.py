@@ -111,7 +111,8 @@ def main():
         t0 = time.time()
 
         final_df = scorer.ndcg_optimal_sort(scored_df)
-        final_df['key_strengths'] = "N/A"
+        from output_formatter import generate_key_strengths
+        final_df['key_strengths'] = final_df.apply(generate_key_strengths, axis=1)
         final_df['rank'] = range(1, len(final_df) + 1)
         final_df.to_pickle(os.path.join(args.output, 'final_ranked.pkl'))
 

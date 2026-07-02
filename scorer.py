@@ -672,7 +672,10 @@ def ndcg_optimal_sort(df_scored):
     We have now perfected HYBRID_SCORE so that it naturally ranks the best candidates first.
     We simply sort by HYBRID_SCORE.
     """
-    return df_scored.sort_values('HYBRID_SCORE', ascending=False).reset_index(drop=True)
+    return df_scored.sort_values(
+        ['HYBRID_SCORE', 'candidate_id'],
+        ascending=[False, True]
+    ).reset_index(drop=True)
 
 if __name__ == "__main__":
     df = load_data('filtered_candidates.pkl')

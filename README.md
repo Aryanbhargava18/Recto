@@ -1,10 +1,10 @@
 # ◈ Recto — Deterministic Candidate Intelligence
 
-> **100,000 candidates. 60 seconds. Zero LLMs. Zero internet. Pure engineering.**
+> **100,000 candidates. 3 minutes. Zero LLMs. Zero internet. Pure engineering.**
 
 ![Zero LLM](https://img.shields.io/badge/LLM_Inference-Zero_Calls-blue)
 ![CPU Only](https://img.shields.io/badge/Compute-CPU_Only-orange)
-![60s](https://img.shields.io/badge/End--to--End-%3C_60s-brightgreen)
+![3min](https://img.shields.io/badge/End--to--End-%3C_3min-brightgreen)
 ![Deterministic](https://img.shields.io/badge/Output-Byte--Identical-purple)
 ![Docker](https://img.shields.io/badge/Docker-Offline_Ready-informational)
 
@@ -14,7 +14,7 @@
 
 ## The Problem
 
-The Redrob AI Hackathon dataset contains **100,000 candidate profiles** — but roughly **80 are honeypot fakes**: keyword-stuffed "resume stuffer" profiles designed to fool naive retrieval systems. Let too many honeypots into your top 100 and your submission is disqualified.
+The Redrob AI Hackathon dataset contains **100,000 candidate profiles** — but roughly **80 are honeypot fakes**: keyword-stuffed profiles designed to fool naive retrieval systems. Let too many honeypots into your top 100 and your submission is disqualified.
 
 The constraints are brutal:
 - ≤ 5 minutes end-to-end
@@ -28,7 +28,7 @@ The constraints are brutal:
 | Approach | Problem |
 |---|---|
 | **BM25 / keyword search** | Honeypots are *built* to game this. A "Graphic Designer" who stuffs "FAISS, BM25, vector embeddings" ranks near the top. |
-| **Semantic search (FAISS + embeddings)** | Captures meaning but not precision. Adjacent candidates outrank actual practitioners. Also requires a 29-minute precompute with BGE-small. |
+| **Semantic search (FAISS + embeddings)** | Captures meaning but not precision. Adjacent candidates outrank actual practitioners. Requires ~29-minute precompute. |
 | **LLM-based ranking** | Cannot run offline in 5 minutes on CPU. Hallucinate on structured data. Non-deterministic. |
 
 ## Our Approach: Engineering > Brute Force
@@ -51,8 +51,9 @@ Recto doesn't throw a neural model at the problem and pray. Instead, we built a 
 │  SPLADE, dense retrieval) weighted 3x.          │
 ├─────────────────────────────────────────────────┤
 │  Layer 4: SEMANTIC BOOST (TF-IDF)               │
-│  Cosine similarity against ideal "Senior Search │
-│  Engineer" composite vector. Additive boost.    │
+│  Pre-computed cosine similarity against ideal   │
+│  "Senior Search Engineer" composite vector.     │
+│  Additive boost — never overrides heuristics.   │
 ├─────────────────────────────────────────────────┤
 │  Layer 5: DETERMINISTIC SORT                    │
 │  Strict mathematical rank. Zero inversions.     │
@@ -80,15 +81,15 @@ We parse engagement signals that most systems ignore:
 
 ---
 
-## Performance Comparison
+## Performance
 
 | Metric | Recto | Typical FAISS Approach |
 |---|---|---|
-| **Precompute time** | **0 minutes** (no embeddings needed) | 29 minutes (BGE-small encoding) |
-| **Ranking time** | **< 60 seconds** | ~2 minutes |
-| **Total end-to-end** | **< 60 seconds** | ~31 minutes |
+| **Total end-to-end** | **< 3 minutes** (incl. pre-computation) | ~31 minutes |
+| **Ranking step only** | **< 60 seconds** | ~2 minutes |
+| **Pre-computation** | ~2 minutes (TF-IDF, one-time) | ~29 minutes (BGE-small) |
 | **RAM usage** | ~4 GB | ~8-12 GB |
-| **External models** | None | BGE-small (130M params) |
+| **External models** | None (TF-IDF only) | BGE-small (130M params) |
 | **Deterministic** | ✅ Byte-identical | ✅ |
 | **Honeypot filtering** | 5-layer heuristic funnel | Post-hoc LLM filter |
 
@@ -99,11 +100,13 @@ We parse engagement signals that most systems ignore:
 ## Quick Start
 
 ```bash
-# Install dependencies
+# Clone and install
+git clone https://github.com/harshitnub077/Recto.git
+cd Recto
 pip install -r requirements.txt
 
-# Run the full pipeline (< 60 seconds)
-python main.py --candidates /path/to/dataset.jsonl --output results/
+# Run the full pipeline (< 3 minutes)
+python main.py --candidates ./candidates.jsonl --output ./results
 
 # Launch the interactive dashboard
 streamlit run app.py
@@ -117,8 +120,18 @@ docker build -t recto .
 
 # Run with zero network access (proves no API calls)
 docker run --network=none -v /path/to/data:/data recto \
-    --candidates /data/dataset.jsonl --output /data/results/
+    --candidates /data/candidates.jsonl --output /data/results/
 ```
+
+### Pre-computation (Optional)
+
+The TF-IDF semantic similarity matrix can be pre-computed separately:
+
+```bash
+python precompute_embeddings.py --candidates ./candidates.jsonl --output ./results
+```
+
+This generates `semantic_scores.pkl` (used as an additive scoring boost). If the file doesn't exist at runtime, main.py will generate it automatically.
 
 ---
 
@@ -128,6 +141,7 @@ The Streamlit dashboard provides a premium candidate intelligence interface:
 
 - **Real candidate names** with structured metadata
 - **Circular match-score rings** with animated SVG progress
+- **2-3 sentence recruiter-style reasoning** for each candidate
 - **Signal badges**: OPEN, FAANG, TIER-1 UNI, IR ROLES, LTR, GitHub stars
 - **Score distribution** and **pipeline visualization**
 - **CSV export** for recruiter workflows
@@ -152,9 +166,12 @@ The Streamlit dashboard provides a premium candidate intelligence interface:
 ```
 Recto/
 ├── main.py                  # Entry point — runs the full pipeline
-├── app.py                   # Streamlit dashboard (premium UI)
-├── output_formatter.py      # Reasoning generation & report builder
+├── scorer.py                # Core scoring engine (5-layer funnel)
+├── data_loader.py           # JSONL parsing, feature extraction
+├── jd_parser.py             # Job description requirement extraction
 ├── precompute_embeddings.py # TF-IDF semantic matrix builder
+├── output_formatter.py      # Natural-language reasoning & report generation
+├── app.py                   # Streamlit dashboard (premium UI)
 ├── Dockerfile               # Offline Docker container
 ├── requirements.txt         # Python dependencies
 ├── submission_metadata.yaml # Hackathon submission metadata

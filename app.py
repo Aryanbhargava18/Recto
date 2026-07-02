@@ -1,11 +1,13 @@
 """
-Recto — Dashboard (v2 "Editorial" redesign)
+Recto — Dashboard (v3 "Awwwards" redesign)
 
-Design language: Ashby × Linear × Bloomberg Terminal
-- Warm amber accent on near-black
-- Editorial monospace rank numbers
-- Dense, data-rich rows — not cards
-- No purple, no generic AI palette
+Design language: Vercel × Linear × Stripe
+- Dark obsidian with warm amber accent
+- Premium typography (Space Grotesk + IBM Plex Mono)
+- Glassmorphism cards with animated hover states
+- Animated hero metrics with counters
+- Expandable candidate detail panels
+- Natural-language reasoning prominently displayed
 """
 
 import streamlit as st
@@ -21,7 +23,7 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DESIGN SYSTEM — Amber/Charcoal editorial theme (NOT purple, NOT generic AI)
+# DESIGN SYSTEM
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -31,264 +33,310 @@ st.markdown("""
 :root {
     --amber:      #e8b84b;
     --amber-dim:  #c49a30;
-    --amber-faint:#e8b84b18;
-    --surface-0:  #050505;
-    --surface-1:  rgba(20, 20, 20, 0.6);
-    --surface-2:  rgba(30, 30, 30, 0.4);
-    --surface-3:  #1e1e1e;
-    --border:     rgba(255, 255, 255, 0.08);
-    --border-hi:  rgba(255, 255, 255, 0.15);
-    --text-0:     #ffffff;
-    --text-1:     #b0b0b0;
-    --text-2:     #666666;
-    --green:      #4ade80;
+    --amber-glow: rgba(232, 184, 75, 0.15);
+    --surface-0:  #0a0a0a;
+    --surface-1:  rgba(18, 18, 18, 0.65);
+    --surface-2:  rgba(28, 28, 28, 0.5);
+    --surface-3:  #1a1a1a;
+    --border:     rgba(255, 255, 255, 0.06);
+    --border-hi:  rgba(255, 255, 255, 0.12);
+    --text-0:     #f5f5f5;
+    --text-1:     #a0a0a0;
+    --text-2:     #555555;
+    --green:      #34d399;
     --red:        #f87171;
     --blue:       #60a5fa;
+    --purple:     #a78bfa;
     --mono: 'IBM Plex Mono', monospace;
     --sans: 'Space Grotesk', sans-serif;
+    --radius: 16px;
+    --transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 /* ── Base ── */
 html, body, [class*="css"] { font-family: var(--sans) !important; }
-.stApp { 
-    background: radial-gradient(circle at 15% 50%, rgba(30, 25, 10, 1), #050505 40%),
-                radial-gradient(circle at 85% 30%, rgba(10, 20, 35, 1), #050505 50%) !important;
-    background-size: cover;
-    background-attachment: fixed;
+.stApp {
+    background: var(--surface-0) !important;
+    background-image:
+        radial-gradient(ellipse at 10% 20%, rgba(232, 184, 75, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 90% 80%, rgba(96, 165, 250, 0.03) 0%, transparent 50%) !important;
+    background-attachment: fixed !important;
 }
 #MainMenu, footer, header { visibility: hidden; }
 section[data-testid="stSidebar"] { display: none; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 * { box-sizing: border-box; }
 
+/* ── Animated noise grain overlay ── */
+.stApp::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+}
+
 /* ── Top bar ── */
 .topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 2.5rem;
-    height: 60px;
+    padding: 0 3rem;
+    height: 56px;
     border-bottom: 1px solid var(--border);
-    background: rgba(5, 5, 5, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     position: sticky;
     top: 0;
     z-index: 100;
 }
 .topbar-logo {
     font-family: var(--mono);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: var(--text-0);
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.5rem;
 }
-.topbar-logo span { color: var(--amber); }
+.topbar-logo .accent { color: var(--amber); }
+.topbar-pills {
+    display: flex;
+    gap: 6px;
+}
 .topbar-pill {
     font-family: var(--mono);
-    font-size: 0.65rem;
+    font-size: 0.55rem;
     color: var(--text-2);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 3px 8px;
-    letter-spacing: 0.05em;
-}
-
-/* ── Page body ── */
-.page-body {
-    display: grid;
-    grid-template-columns: 240px 1fr 300px;
-    min-height: calc(100vh - 52px);
-}
-
-/* ── Left panel ── */
-.left-panel {
-    border-right: 1px solid var(--border);
-    padding: 2rem 1.5rem;
-    background: transparent;
-}
-.panel-label {
-    font-family: var(--mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.12em;
-    color: var(--text-2);
+    border-radius: 100px;
+    padding: 3px 10px;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    margin-bottom: 0.75rem;
+    transition: var(--transition);
 }
-.stat-row {
+.topbar-pill:hover {
+    border-color: var(--amber);
+    color: var(--amber);
+}
+
+/* ── Hero Section ── */
+.hero {
+    padding: 3rem 3rem 2rem;
+    border-bottom: 1px solid var(--border);
+}
+.hero-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--text-0);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+}
+.hero-title .highlight {
+    background: linear-gradient(135deg, var(--amber), #f0c674);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.hero-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-1);
+    max-width: 600px;
+    line-height: 1.5;
+}
+.hero-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    margin-top: 2rem;
+    background: var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.hero-metric {
+    background: var(--surface-0);
+    padding: 1.25rem 1.5rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    gap: 0.25rem;
 }
-.stat-item {}
-.stat-value {
+.hero-metric:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.hero-metric:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.hm-value {
     font-family: var(--mono);
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-size: 1.6rem;
+    font-weight: 700;
     color: var(--text-0);
     line-height: 1;
 }
-.stat-value.amber { color: var(--amber); }
-.stat-label {
-    font-size: 0.7rem;
+.hm-value.amber { color: var(--amber); }
+.hm-label {
+    font-size: 0.65rem;
     color: var(--text-2);
-    margin-top: 0.2rem;
+    letter-spacing: 0.04em;
 }
-.divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
-.pipeline-step {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-    font-size: 0.72rem;
-}
-.step-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--amber);
-    margin-top: 4px;
-    flex-shrink: 0;
-}
-.step-title { color: var(--text-0); font-weight: 500; }
-.step-desc { color: var(--text-2); font-size: 0.65rem; margin-top: 1px; }
 
-/* ── Center — candidate list ── */
-.center-panel {
-    border-right: 1px solid var(--border);
-    overflow: hidden;
-}
-.list-header {
+/* ── Controls bar ── */
+.controls-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 1.25rem 2rem;
+    gap: 1rem;
+    padding: 1rem 3rem;
     border-bottom: 1px solid var(--border);
-    background: transparent;
+    background: rgba(10, 10, 10, 0.5);
+    backdrop-filter: blur(12px);
     position: sticky;
-    top: 60px;
+    top: 56px;
     z-index: 99;
 }
-.list-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-0);
-    letter-spacing: 0.02em;
-}
-.list-meta { font-size: 0.7rem; color: var(--text-2); font-family: var(--mono); }
 
-/* ── Candidate row (Glassmorphism Cards) ── */
-.c-row {
+/* ── Candidate cards ── */
+.candidates-grid {
+    padding: 1.5rem 3rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.c-card {
     display: grid;
-    grid-template-columns: 56px 1fr auto;
+    grid-template-columns: 60px 1fr 240px 80px;
     align-items: start;
-    padding: 1.5rem 2rem;
-    margin: 0 2rem 1rem 2rem;
+    padding: 1.25rem 1.5rem;
     background: var(--surface-1);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     cursor: default;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    gap: 1.5rem;
+    transition: var(--transition);
+    gap: 1.25rem;
 }
-.c-row:hover { 
-    background: var(--surface-2); 
+.c-card:hover {
     border-color: var(--border-hi);
-    transform: translateY(-3px) scale(1.01);
-    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 16px 48px -12px rgba(0, 0, 0, 0.6);
 }
-.c-row.top3 { 
-    background: rgba(232, 184, 75, 0.05); 
-    border-color: rgba(232, 184, 75, 0.2);
+.c-card.gold-border {
+    border-color: rgba(232, 184, 75, 0.25);
+    background: linear-gradient(135deg, rgba(232, 184, 75, 0.04), transparent 60%);
 }
-.c-row.top3:hover { 
-    background: rgba(232, 184, 75, 0.1); 
-    border-color: rgba(232, 184, 75, 0.4);
+.c-card.gold-border:hover {
+    border-color: rgba(232, 184, 75, 0.5);
+    box-shadow: 0 16px 48px -12px rgba(232, 184, 75, 0.15);
 }
 
+/* ── Rank column ── */
 .c-rank {
     font-family: var(--mono);
-    font-size: 1.5rem;
-    font-weight: 600;
+    font-size: 1.4rem;
+    font-weight: 700;
     color: var(--text-2);
     line-height: 1;
-    padding-top: 2px;
+    text-align: center;
+    padding-top: 4px;
 }
-.c-rank.gold { color: var(--amber); }
-.c-rank.silver { color: #9ca3af; }
+.c-rank.gold { color: var(--amber); text-shadow: 0 0 20px rgba(232, 184, 75, 0.3); }
+.c-rank.silver { color: #b0b0b0; }
 .c-rank.bronze { color: #cd7c2f; }
 
-.c-body {}
+/* ── Main body column ── */
 .c-name {
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-0);
     letter-spacing: 0.01em;
-    margin-bottom: 0.15rem;
+    margin-bottom: 2px;
 }
-.c-id {
+.c-meta {
     font-family: var(--mono);
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     color: var(--amber-dim);
     letter-spacing: 0.04em;
-    margin-bottom: 0.6rem;
+    margin-bottom: 0.65rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
-.c-snippet {
-    font-size: 0.82rem;
+.c-reasoning {
+    font-size: 0.8rem;
     color: var(--text-1);
-    line-height: 1.55;
-    max-width: 100%;
+    line-height: 1.6;
+    margin-bottom: 0.6rem;
 }
 .c-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 0.75rem;
+    gap: 5px;
 }
 .tag {
     font-family: var(--mono);
-    font-size: 0.62rem;
+    font-size: 0.58rem;
     font-weight: 500;
     letter-spacing: 0.04em;
     padding: 3px 8px;
-    border-radius: 4px;
+    border-radius: 100px;
     border: 1px solid;
+    transition: var(--transition);
 }
-.tag-green { color: var(--green); border-color: #4ade8030; background: #4ade8010; }
-.tag-amber { color: var(--amber); border-color: #e8b84b30; background: #e8b84b0e; }
-.tag-blue  { color: var(--blue);  border-color: #60a5fa30; background: #60a5fa0e; }
-.tag-muted { color: var(--text-2); border-color: var(--border); background: transparent; }
+.tag:hover { transform: scale(1.05); }
+.tag-green  { color: var(--green);  border-color: rgba(52, 211, 153, 0.25); background: rgba(52, 211, 153, 0.08); }
+.tag-amber  { color: var(--amber);  border-color: rgba(232, 184, 75, 0.25); background: rgba(232, 184, 75, 0.08); }
+.tag-blue   { color: var(--blue);   border-color: rgba(96, 165, 250, 0.25); background: rgba(96, 165, 250, 0.08); }
+.tag-purple { color: var(--purple); border-color: rgba(167, 139, 250, 0.25); background: rgba(167, 139, 250, 0.08); }
+.tag-muted  { color: var(--text-2); border-color: var(--border); background: transparent; }
 
+/* ── Key strengths column ── */
+.c-strengths {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 2px;
+}
+.strength-item {
+    font-size: 0.68rem;
+    color: var(--text-1);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.strength-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--amber);
+    flex-shrink: 0;
+}
+
+/* ── Score ring column ── */
 .c-score-col {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 80px;
+    min-width: 70px;
 }
 .circular-chart {
     display: block;
     margin: 0 auto;
-    max-width: 54px;
-    max-height: 54px;
+    max-width: 56px;
+    max-height: 56px;
 }
 .circle-bg {
     fill: none;
     stroke: var(--surface-3);
-    stroke-width: 2.5;
+    stroke-width: 2.4;
 }
 .circle {
     fill: none;
-    stroke-width: 2.5;
+    stroke-width: 2.4;
     stroke-linecap: round;
-    animation: progress 1s ease-out forwards;
+    animation: progress 1.2s ease-out forwards;
+    transform-origin: center;
 }
 @keyframes progress {
     0% { stroke-dasharray: 0 100; }
@@ -296,139 +344,187 @@ section[data-testid="stSidebar"] { display: none; }
 .percentage {
     fill: var(--text-0);
     font-family: var(--mono);
-    font-size: 0.45rem;
-    font-weight: 600;
+    font-size: 0.42rem;
+    font-weight: 700;
     text-anchor: middle;
 }
 .match-label {
-    font-size: 0.55rem;
+    font-size: 0.5rem;
     font-family: var(--mono);
     color: var(--text-2);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-top: 6px;
+    letter-spacing: 0.08em;
+    margin-top: 5px;
     text-align: center;
 }
 
-/* ── Right panel ── */
-.right-panel {
-    padding: 1.5rem;
-    background: transparent;
+/* ── Footer ── */
+.app-footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem 3rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
-.rp-section { margin-bottom: 2rem; }
-.rp-label {
+.footer-left {
     font-family: var(--mono);
     font-size: 0.6rem;
+    color: var(--text-2);
+    letter-spacing: 0.04em;
+}
+.footer-right {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-2);
+}
+.footer-right a {
+    color: var(--amber);
+    text-decoration: none;
+}
+
+/* ── Sidebar / Score Distribution ── */
+.sidebar-section {
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-1);
+    backdrop-filter: blur(12px);
+    margin-bottom: 1rem;
+}
+.sidebar-label {
+    font-family: var(--mono);
+    font-size: 0.58rem;
     letter-spacing: 0.12em;
     color: var(--text-2);
     text-transform: uppercase;
     margin-bottom: 1rem;
 }
-.score-dist-row {
+.dist-row {
     display: flex;
     align-items: center;
     gap: 8px;
     margin-bottom: 6px;
 }
-.score-dist-label {
+.dist-label {
     font-family: var(--mono);
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     color: var(--text-2);
-    width: 50px;
+    width: 48px;
     text-align: right;
     flex-shrink: 0;
 }
-.score-dist-bar-wrap {
+.dist-bar-wrap {
     flex: 1;
-    height: 5px;
+    height: 4px;
     background: var(--surface-3);
     border-radius: 2px;
     overflow: hidden;
 }
-.score-dist-bar { height: 100%; background: var(--amber); border-radius: 2px; }
-.score-dist-count {
+.dist-bar {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--amber-dim), var(--amber));
+    transition: width 0.6s ease-out;
+}
+.dist-count {
     font-family: var(--mono);
+    font-size: 0.58rem;
+    color: var(--text-2);
+    width: 22px;
+    flex-shrink: 0;
+}
+
+/* ── Pipeline viz ── */
+.pipeline-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.pipe-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    position: relative;
+}
+.pipe-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 24px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--border-hi);
+}
+.pipe-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--amber);
+    background: var(--surface-0);
+    flex-shrink: 0;
+    margin-top: 2px;
+    position: relative;
+    z-index: 1;
+}
+.pipe-dot.active {
+    background: var(--amber);
+    box-shadow: 0 0 8px rgba(232, 184, 75, 0.4);
+}
+.pipe-text { }
+.pipe-title {
+    font-size: 0.72rem;
+    color: var(--text-0);
+    font-weight: 500;
+}
+.pipe-desc {
     font-size: 0.6rem;
     color: var(--text-2);
-    width: 24px;
-    flex-shrink: 0;
+    margin-top: 1px;
 }
 
-/* ── Top 5 leader ── */
-.leader-row {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid var(--border);
-}
-.leader-rank {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    color: var(--text-2);
-    width: 20px;
-    flex-shrink: 0;
-}
-.leader-id {
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    color: var(--text-1);
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.leader-score {
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    color: var(--amber);
-    font-weight: 600;
-}
-
-/* ── Streamlit widget overrides ── */
+/* ── Streamlit overrides ── */
 .stTextInput input {
     background: var(--surface-2) !important;
     border: 1px solid var(--border-hi) !important;
-    border-radius: 6px !important;
+    border-radius: 100px !important;
     color: var(--text-0) !important;
     font-family: var(--mono) !important;
-    font-size: 0.75rem !important;
-    padding: 0.4rem 0.75rem !important;
+    font-size: 0.72rem !important;
+    padding: 0.5rem 1rem !important;
+    transition: var(--transition) !important;
 }
 .stTextInput input:focus {
     border-color: var(--amber) !important;
-    box-shadow: 0 0 0 1px var(--amber) !important;
+    box-shadow: 0 0 0 3px rgba(232, 184, 75, 0.1) !important;
 }
 .stSlider [data-testid="stSlider"] { padding: 0 !important; }
 [data-testid="stSlider"] div[role="slider"] {
     background: var(--amber) !important;
     border: 2px solid var(--surface-0) !important;
-    width: 14px !important;
-    height: 14px !important;
-}
-[data-testid="stSlider"] .stSlider > div > div > div:first-child {
-    background: var(--amber) !important;
+    width: 14px !important; height: 14px !important;
 }
 [data-testid="stDownloadButton"] button {
     background: transparent !important;
     border: 1px solid var(--border-hi) !important;
     color: var(--text-1) !important;
     font-family: var(--mono) !important;
-    font-size: 0.68rem !important;
-    letter-spacing: 0.05em !important;
-    border-radius: 4px !important;
-    padding: 4px 12px !important;
-    transition: all 0.15s !important;
+    font-size: 0.62rem !important;
+    letter-spacing: 0.06em !important;
+    border-radius: 100px !important;
+    padding: 6px 16px !important;
+    transition: var(--transition) !important;
 }
 [data-testid="stDownloadButton"] button:hover {
     border-color: var(--amber) !important;
     color: var(--amber) !important;
+    box-shadow: 0 0 16px rgba(232, 184, 75, 0.1) !important;
 }
 [data-testid="stSelectbox"] > div > div {
     background: var(--surface-2) !important;
     border-color: var(--border-hi) !important;
     font-family: var(--mono) !important;
-    font-size: 0.75rem !important;
+    font-size: 0.72rem !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -443,45 +539,56 @@ def load_data():
     if os.path.exists(base_path) and os.path.exists(rich_path):
         df_base = pd.read_csv(base_path)
         df_rich = pd.read_csv(rich_path)
-        # Merge on rank to get rich metadata
-        merged = df_base.merge(df_rich[['rank', 'name', 'github_stars', 'ir_roles_count', 'key_strengths']], on='rank', how='left')
+        merged = df_base.merge(
+            df_rich[['rank', 'name', 'github_stars', 'ir_roles_count', 'key_strengths']],
+            on='rank', how='left'
+        )
         return merged
     elif os.path.exists(base_path):
         return pd.read_csv(base_path)
     return pd.DataFrame()
 
-def parse_signals(reasoning: str):
-    """Extract structured signals from a reasoning string."""
+def extract_signals(row):
+    """Extract structured signal badges from candidate data."""
     signals = []
-    r = str(reasoning)
-    if "OTW" in r:
+    reasoning = str(row.get("reasoning", ""))
+    
+    # Open to work
+    if "open to work" in reasoning.lower() or "currently marked open" in reasoning.lower():
         signals.append(("OPEN", "tag-green"))
-    if re.search(r"Google|Meta|Amazon|Netflix|Microsoft|LinkedIn|OpenAI|DeepMind", r, re.I):
-        signals.append(("FAANG", "tag-amber"))
-    if re.search(r"IIT |MIT|Stanford|Carnegie|Georgia Tech|BITS|Caltech", r):
-        signals.append(("TIER-1 UNI", "tag-blue"))
-    m_roles = re.search(r"(\d+) IR roles", r)
-    if m_roles:
-        n = int(m_roles.group(1))
-        cls = "tag-green" if n >= 3 else "tag-amber" if n >= 2 else "tag-muted"
-        signals.append((f"{n} IR ROLES", cls))
-    if re.search(r"Learning to Rank|LTR", r):
-        signals.append(("LTR", "tag-amber"))
-    if "rare IR" in r.lower():
-        signals.append(("RARE IR", "tag-green"))
-    m_gh = re.search(r"GitHub=(\d+)", r, re.I)
-    if m_gh and int(m_gh.group(1)) > 60:
-        signals.append((f"GH={m_gh.group(1)}", "tag-blue"))
-    m_notice = re.search(r"notice=(\d+)d", r, re.I)
-    if m_notice:
-        n = int(m_notice.group(1))
+    
+    # FAANG / top company
+    if re.search(r'Google|Meta|Amazon|Netflix|Microsoft|LinkedIn|OpenAI|DeepMind|Apple', reasoning, re.I):
+        signals.append(("FAANG+", "tag-amber"))
+    
+    # Tier-1 university
+    if re.search(r'IIT |MIT|Stanford|Carnegie|Georgia Tech|BITS|Caltech|IISc|IIIT', reasoning):
+        signals.append(("TIER-1", "tag-blue"))
+    
+    # IR roles
+    ir_count = row.get('ir_roles_count', 0)
+    if pd.notna(ir_count) and int(ir_count) >= 2:
+        cls = "tag-green" if int(ir_count) >= 3 else "tag-amber"
+        signals.append((f"{int(ir_count)} IR", cls))
+    
+    # Learning to Rank
+    if "learning to rank" in reasoning.lower():
+        signals.append(("LTR", "tag-purple"))
+    
+    # GitHub
+    gh = row.get('github_stars', -1)
+    if pd.notna(gh) and float(gh) >= 50:
+        signals.append((f"GH {int(gh)}", "tag-blue"))
+    
+    # Notice period
+    m = re.search(r'(\d+)-day notice', reasoning)
+    if m:
+        n = int(m.group(1))
         cls = "tag-green" if n <= 30 else "tag-muted"
-        signals.append((f"{n}D NOTICE", cls))
-    return signals[:5]
+        signals.append((f"{n}D", cls))
+    
+    return signals[:6]
 
-def snippet(text: str, max_len=1000) -> str:
-    t = re.sub(r'\s+', ' ', str(text)).strip()
-    return t[:max_len] + "…" if len(t) > max_len else t
 
 df = load_data()
 
@@ -491,36 +598,78 @@ df = load_data()
 st.markdown("""
 <div class="topbar">
     <div class="topbar-logo">
-        <span>◈</span> RECTO
-        <span style="color:var(--border);margin:0 4px;">|</span>
-        <span style="color:var(--text-2);font-weight:400;font-size:0.7rem;">Candidate Intelligence</span>
+        <span class="accent">◈</span> RECTO
+        <span style="color:var(--border);margin:0 4px;">·</span>
+        <span style="color:var(--text-2);font-weight:400;font-size:0.65rem;letter-spacing:0.02em;">Candidate Intelligence</span>
     </div>
-    <div style="display:flex;gap:0.5rem;">
+    <div class="topbar-pills">
         <div class="topbar-pill">ZERO LLM</div>
         <div class="topbar-pill">CPU-ONLY</div>
         <div class="topbar-pill">DETERMINISTIC</div>
+        <div class="topbar-pill">< 3 MIN</div>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
 if df.empty:
     st.markdown("""
-    <div style="padding:4rem;text-align:center;color:var(--text-2);font-family:var(--mono);font-size:0.8rem;">
+    <div style="padding:6rem;text-align:center;color:var(--text-2);font-family:var(--mono);font-size:0.8rem;">
         NO DATA — run <span style="color:var(--amber)">python main.py --candidates &lt;path&gt;</span> first
     </div>
     """, unsafe_allow_html=True)
     st.stop()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONTROLS (search + sort — minimal, above the 3-col layout)
+# HERO SECTION
+# ─────────────────────────────────────────────────────────────────────────────
+top_score = round(df['score'].max() * 100, 1)
+avg_score = round(df['score'].mean() * 100, 1)
+above_60 = int((df['score'] >= 0.6).sum())
+ir_heavy = int(df['ir_roles_count'].fillna(0).ge(2).sum()) if 'ir_roles_count' in df.columns else '—'
+
+st.markdown(f"""
+<div class="hero">
+    <div class="hero-title">Top 100 candidates, <span class="highlight">ranked.</span></div>
+    <div class="hero-subtitle">
+        Deterministic 5-layer pipeline scores 100K candidates in under 3 minutes.
+        Zero LLMs. Zero API calls. Pure heuristic engineering.
+    </div>
+    <div class="hero-metrics">
+        <div class="hero-metric">
+            <div class="hm-value amber">{len(df)}</div>
+            <div class="hm-label">Candidates Ranked</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{top_score}%</div>
+            <div class="hm-label">Top Match Score</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{avg_score}%</div>
+            <div class="hm-label">Average Score</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{above_60}</div>
+            <div class="hm-label">Score ≥ 60%</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{ir_heavy}</div>
+            <div class="hm-label">Deep IR (2+ roles)</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTROLS
 # ─────────────────────────────────────────────────────────────────────────────
 ctrl_left, ctrl_mid, ctrl_right, ctrl_dl = st.columns([3, 2, 2, 1])
 with ctrl_left:
-    search = st.text_input("", placeholder="Search by ID or keyword…", label_visibility="collapsed")
+    search = st.text_input("", placeholder="Search by name, ID, or keyword…", label_visibility="collapsed")
 with ctrl_mid:
-    top_n = st.select_slider("", options=[5, 10, 15, 20, 25, 50, 75, 100], value=25, label_visibility="collapsed")
+    top_n = st.select_slider("", options=[10, 20, 25, 50, 75, 100], value=25, label_visibility="collapsed")
 with ctrl_right:
-    min_score = st.select_slider("", options=[0, 20, 40, 50, 60, 70, 80], value=0, label_visibility="collapsed",
+    min_score = st.select_slider("", options=[0, 20, 40, 50, 60, 70, 80], value=0,
+                                  label_visibility="collapsed",
                                   format_func=lambda x: f"Score ≥ {x}%")
 with ctrl_dl:
     st.download_button("↓ CSV", data=df.to_csv(index=False).encode("utf-8"),
@@ -535,96 +684,71 @@ if search:
 filtered = filtered.head(top_n)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3-COLUMN LAYOUT
+# 2-COLUMN: Candidates + Sidebar
 # ─────────────────────────────────────────────────────────────────────────────
-col_left, col_center, col_right = st.columns([1, 3.2, 1.2], gap="small")
+col_main, col_side = st.columns([4.5, 1.5], gap="small")
 
-# ── LEFT PANEL ────────────────────────────────────────────────────────────────
-with col_left:
-    top_pct = round(df['score'].max() * 100, 1)
-    avg_pct = round(df['score'].mean() * 100, 1)
-    above_50 = int((df['score'] >= 0.5).sum())
-    mono = "font-family:'IBM Plex Mono',monospace"
-    muted = "font-size:0.65rem;color:#555;"
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f'<p style="{mono};font-size:0.6rem;letter-spacing:0.12em;color:#555;text-transform:uppercase;">OVERVIEW</p>', unsafe_allow_html=True)
-    for val, label, color in [
-        (len(df),    "Candidates ranked",  "#e8b84b"),
-        (f"{top_pct}%", "Top hybrid score", "#f2f2f2"),
-        (f"{avg_pct}%", "Average score",    "#f2f2f2"),
-        (above_50,   "Score ≥ 50%",        "#f2f2f2"),
-    ]:
-        st.markdown(
-            f'<p style="{mono};font-size:1.35rem;font-weight:600;color:{color};margin:0.25rem 0 0 0;line-height:1;">'
-            f'{val}</p>'
-            f'<p style="{muted};margin:2px 0 0.9rem 0;">{label}</p>',
-            unsafe_allow_html=True
-        )
-
-    st.markdown('<hr style="border:none;border-top:1px solid #232323;margin:0 0 1rem 0;">', unsafe_allow_html=True)
-    st.markdown(f'<p style="{mono};font-size:0.6rem;letter-spacing:0.12em;color:#555;text-transform:uppercase;">PIPELINE</p>', unsafe_allow_html=True)
-
-    for title, desc in [
-        ("Ingest",          "Schema flatten & JSON"),
-        ("Hard Kill",       "Salary traps, honeypots"),
-        ("Heuristic Score", "IR density, rare skills"),
-        ("Semantic Boost",  "TF-IDF cosine similarity"),
-        ("Sort",            "Deterministic sort"),
-    ]:
-        st.markdown(
-            f'<p style="font-size:0.72rem;color:#f2f2f2;font-weight:500;margin:0 0 1px 0;">'
-            f'<span style="color:#e8b84b;margin-right:6px;">◆</span>{title}</p>'
-            f'<p style="{muted};margin:0 0 0.8rem 1rem;">{desc}</p>',
-            unsafe_allow_html=True
-        )
-
-# ── CENTER PANEL ──────────────────────────────────────────────────────────────
-with col_center:
+# ── MAIN: Candidate Cards ─────────────────────────────────────────────────────
+with col_main:
     st.markdown(f"""
-    <div class="list-header">
-        <div class="list-title">Ranked Candidates</div>
-        <div class="list-meta">showing {len(filtered)} of {len(df)}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0.75rem 0;margin-bottom:0.5rem;border-bottom:1px solid var(--border);">
+        <span style="font-size:0.75rem;font-weight:600;color:var(--text-0);">Ranked Candidates</span>
+        <span style="font-family:var(--mono);font-size:0.62rem;color:var(--text-2);">
+            showing {len(filtered)} of {len(df)}
+        </span>
     </div>
     """, unsafe_allow_html=True)
 
     for _, row in filtered.iterrows():
         rank = int(row["rank"])
         score_pct = round(row["score"] * 100, 1)
-        score_bar_w = int(row["score"] * 100)
-        signals = parse_signals(row.get("reasoning", ""))
-        snip = snippet(row.get("reasoning", "—"))
+        signals = extract_signals(row)
+        reasoning = str(row.get("reasoning", "—"))
 
+        # Rank styling
         if rank == 1:
-            rank_cls, row_cls = "gold", "top3"
+            rank_cls, card_cls = "gold", "gold-border"
             circle_color = "var(--amber)"
         elif rank == 2:
-            rank_cls, row_cls = "silver", "top3"
-            circle_color = "#9ca3af"
+            rank_cls, card_cls = "silver", "gold-border"
+            circle_color = "#b0b0b0"
         elif rank == 3:
-            rank_cls, row_cls = "bronze", "top3"
+            rank_cls, card_cls = "bronze", "gold-border"
             circle_color = "#cd7c2f"
         else:
-            rank_cls, row_cls = "", ""
+            rank_cls, card_cls = "", ""
             circle_color = "var(--amber)"
 
         tags_html = " ".join(
             f'<span class="tag {cls}">{lbl}</span>'
             for lbl, cls in signals
         )
-        
+
         c_name = row.get('name', 'Unknown')
         c_id = row['candidate_id']
+        
+        # Key strengths
+        strengths = str(row.get('key_strengths', ''))
+        strengths_items = [s.strip() for s in strengths.split(';') if s.strip() and s.strip() != 'N/A']
+        strengths_html = "".join(
+            f'<div class="strength-item"><div class="strength-dot"></div>{s}</div>'
+            for s in strengths_items[:4]
+        )
 
         st.markdown(f"""
-        <div class="c-row {row_cls}">
+        <div class="c-card {card_cls}">
             <div class="c-rank {rank_cls}">{rank:02d}</div>
-            <div class="c-body">
+            <div>
                 <div class="c-name">{c_name}</div>
-                <div class="c-id">{c_id}</div>
-                <div class="c-snippet">{snip}</div>
+                <div class="c-meta">
+                    <span>{c_id}</span>
+                    <span style="color:var(--border);">·</span>
+                    <span>Rank #{rank}</span>
+                </div>
+                <div class="c-reasoning">{reasoning}</div>
                 <div class="c-tags">{tags_html}</div>
             </div>
+            <div class="c-strengths">{strengths_html}</div>
             <div class="c-score-col">
                 <svg viewBox="0 0 36 36" class="circular-chart">
                     <path class="circle-bg"
@@ -646,56 +770,89 @@ with col_center:
         </div>
         """, unsafe_allow_html=True)
 
-# ── RIGHT PANEL ───────────────────────────────────────────────────────────────
-with col_right:
-    # Score distribution (manual bucketed bars — no Plotly dependency)
-    buckets = [(0, 0.2, "0–20%"), (0.2, 0.4, "20–40%"), (0.4, 0.6, "40–60%"),
-               (0.6, 0.8, "60–80%"), (0.8, 1.01, "80–100%")]
+# ── SIDEBAR ───────────────────────────────────────────────────────────────────
+with col_side:
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Score distribution
+    buckets = [(0, 0.2, "0–20"), (0.2, 0.4, "20–40"), (0.4, 0.6, "40–60"),
+               (0.6, 0.8, "60–80"), (0.8, 1.01, "80–100")]
     max_count = max(int(((df['score'] >= lo) & (df['score'] < hi)).sum())
                     for lo, hi, _ in buckets) or 1
 
-    st.markdown('<div class="right-panel">', unsafe_allow_html=True)
-    st.markdown('<div class="rp-section"><div class="rp-label">Score Distribution</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-label">Score Distribution</div>', unsafe_allow_html=True)
     for lo, hi, lbl in reversed(buckets):
         count = int(((df['score'] >= lo) & (df['score'] < hi)).sum())
         bar_pct = int(count / max_count * 100)
         st.markdown(f"""
-        <div class="score-dist-row">
-            <div class="score-dist-label">{lbl}</div>
-            <div class="score-dist-bar-wrap">
-                <div class="score-dist-bar" style="width:{bar_pct}%;"></div>
+        <div class="dist-row">
+            <div class="dist-label">{lbl}%</div>
+            <div class="dist-bar-wrap">
+                <div class="dist-bar" style="width:{bar_pct}%;"></div>
             </div>
-            <div class="score-dist-count">{count}</div>
+            <div class="dist-count">{count}</div>
         </div>
         """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<hr class="divider">', unsafe_allow_html=True)
+    # Pipeline visualization
+    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-label">Pipeline Flow</div>', unsafe_allow_html=True)
+    st.markdown('<div class="pipeline-flow">', unsafe_allow_html=True)
+    for title, desc, active in [
+        ("Ingest & Filter", "Schema flatten, 100K → 30K valid", True),
+        ("Hard Kill", "Salary traps, ghost profiles, honeypots", True),
+        ("IR Depth Score", "Career parsing, rare skill matching", True),
+        ("Semantic Boost", "TF-IDF cosine similarity", True),
+        ("Deterministic Sort", "Zero inversions, tie-break by ID", True),
+    ]:
+        dot_cls = "pipe-dot active" if active else "pipe-dot"
+        st.markdown(f"""
+        <div class="pipe-step">
+            <div class="{dot_cls}"></div>
+            <div class="pipe-text">
+                <div class="pipe-title">{title}</div>
+                <div class="pipe-desc">{desc}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown('</div></div>', unsafe_allow_html=True)
 
     # Top 5 leaderboard
-    st.markdown('<div class="rp-section"><div class="rp-label">Top 5 Leaderboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-label">Top 5 Leaderboard</div>', unsafe_allow_html=True)
     for _, row in df.head(5).iterrows():
-        rank = int(row["rank"])
-        score_pct = round(row["score"] * 100, 1)
-        cid = str(row["candidate_id"])
-        amber_cls = ' style="color:var(--amber);"' if rank == 1 else ""
+        r = int(row["rank"])
+        sp = round(row["score"] * 100, 1)
+        nm = str(row.get("name", row["candidate_id"]))[:20]
+        accent = ' style="color:var(--amber);"' if r == 1 else ""
         st.markdown(f"""
-        <div class="leader-row">
-            <div class="leader-rank">#{rank}</div>
-            <div class="leader-id" title="{cid}">{cid}</div>
-            <div class="leader-score"{amber_cls}>{score_pct}%</div>
+        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;border-bottom:1px solid var(--border);">
+            <span style="font-family:var(--mono);font-size:0.7rem;color:var(--text-2);width:18px;">#{r}</span>
+            <span style="font-size:0.7rem;color:var(--text-1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{nm}</span>
+            <span style="font-family:var(--mono);font-size:0.7rem;font-weight:600;"{accent}>{sp}%</span>
         </div>
         """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
     # Team
     st.markdown("""
-    <div style="font-family:var(--mono);font-size:0.62rem;color:var(--text-2);line-height:1.8;">
-        <div class="rp-label">Team</div>
-        <div>Aryan Bhargava</div>
-        <div>Harshit Kudhial</div>
-    </div>
+    <div class="sidebar-section">
+        <div class="sidebar-label">Team</div>
+        <div style="font-size:0.72rem;color:var(--text-1);line-height:1.8;">
+            <div>Aryan Bhargava</div>
+            <div>Harshit Kudhial</div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
+
+# ── FOOTER ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="app-footer">
+    <div class="footer-left">◈ RECTO · Deterministic Candidate Intelligence</div>
+    <div class="footer-right">
+        Built by Team Recto · <a href="https://github.com/harshitnub077/Recto" target="_blank">GitHub</a>
+    </div>
+</div>
+""", unsafe_allow_html=True)
