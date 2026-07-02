@@ -202,15 +202,22 @@ section[data-testid="stSidebar"] { display: none; }
 .c-rank.bronze { color: #cd7c2f; }
 
 .c-body {}
+.c-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-0);
+    letter-spacing: 0.01em;
+    margin-bottom: 0.15rem;
+}
 .c-id {
     font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--amber);
+    font-size: 0.65rem;
+    color: var(--amber-dim);
     letter-spacing: 0.04em;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.6rem;
 }
 .c-snippet {
-    font-size: 0.78rem;
+    font-size: 0.82rem;
     color: var(--text-1);
     line-height: 1.55;
     max-width: 100%;
@@ -218,15 +225,16 @@ section[data-testid="stSidebar"] { display: none; }
 .c-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 0.5rem;
+    gap: 6px;
+    margin-top: 0.75rem;
 }
 .tag {
     font-family: var(--mono);
-    font-size: 0.6rem;
+    font-size: 0.62rem;
+    font-weight: 500;
     letter-spacing: 0.04em;
-    padding: 2px 7px;
-    border-radius: 3px;
+    padding: 3px 8px;
+    border-radius: 4px;
     border: 1px solid;
 }
 .tag-green { color: var(--green); border-color: #4ade8030; background: #4ade8010; }
@@ -235,28 +243,47 @@ section[data-testid="stSidebar"] { display: none; }
 .tag-muted { color: var(--text-2); border-color: var(--border); background: transparent; }
 
 .c-score-col {
-    text-align: right;
-    padding-top: 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     min-width: 80px;
 }
-.c-score-num {
+.circular-chart {
+    display: block;
+    margin: 0 auto;
+    max-width: 54px;
+    max-height: 54px;
+}
+.circle-bg {
+    fill: none;
+    stroke: var(--surface-3);
+    stroke-width: 2.5;
+}
+.circle {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    animation: progress 1s ease-out forwards;
+}
+@keyframes progress {
+    0% { stroke-dasharray: 0 100; }
+}
+.percentage {
+    fill: var(--text-0);
     font-family: var(--mono);
-    font-size: 1rem;
+    font-size: 0.45rem;
     font-weight: 600;
-    color: var(--text-0);
+    text-anchor: middle;
 }
-.c-score-bar-wrap {
-    width: 80px;
-    height: 3px;
-    background: var(--border);
-    border-radius: 2px;
+.match-label {
+    font-size: 0.55rem;
+    font-family: var(--mono);
+    color: var(--text-2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     margin-top: 6px;
-    overflow: hidden;
-}
-.c-score-bar {
-    height: 100%;
-    border-radius: 2px;
-    background: var(--amber);
+    text-align: center;
 }
 
 /* ── Right panel ── */
@@ -387,9 +414,16 @@ section[data-testid="stSidebar"] { display: none; }
 # ─────────────────────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data():
-    path = "results/final_ranking.csv"
-    if os.path.exists(path):
-        return pd.read_csv(path)
+    base_path = "results/final_ranking.csv"
+    rich_path = "results/shortlist_top100.csv"
+    if os.path.exists(base_path) and os.path.exists(rich_path):
+        df_base = pd.read_csv(base_path)
+        df_rich = pd.read_csv(rich_path)
+        # Merge on rank to get rich metadata
+        merged = df_base.merge(df_rich[['rank', 'name', 'github_stars', 'ir_roles_count', 'key_strengths']], on='rank', how='left')
+        return merged
+    elif os.path.exists(base_path):
+        return pd.read_csv(base_path)
     return pd.DataFrame()
 
 def parse_signals(reasoning: str):
@@ -539,31 +573,51 @@ with col_center:
 
         if rank == 1:
             rank_cls, row_cls = "gold", "top3"
+            circle_color = "var(--amber)"
         elif rank == 2:
             rank_cls, row_cls = "silver", "top3"
+            circle_color = "#9ca3af"
         elif rank == 3:
             rank_cls, row_cls = "bronze", "top3"
+            circle_color = "#cd7c2f"
         else:
             rank_cls, row_cls = "", ""
+            circle_color = "var(--amber)"
 
         tags_html = " ".join(
             f'<span class="tag {cls}">{lbl}</span>'
             for lbl, cls in signals
         )
+        
+        c_name = row.get('name', 'Unknown')
+        c_id = row['candidate_id']
 
         st.markdown(f"""
         <div class="c-row {row_cls}">
             <div class="c-rank {rank_cls}">{rank:02d}</div>
             <div class="c-body">
-                <div class="c-id">{row['candidate_id']}</div>
+                <div class="c-name">{c_name}</div>
+                <div class="c-id">{c_id}</div>
                 <div class="c-snippet">{snip}</div>
                 <div class="c-tags">{tags_html}</div>
             </div>
             <div class="c-score-col">
-                <div class="c-score-num">{score_pct}%</div>
-                <div class="c-score-bar-wrap">
-                    <div class="c-score-bar" style="width:{score_bar_w}%;"></div>
-                </div>
+                <svg viewBox="0 0 36 36" class="circular-chart">
+                    <path class="circle-bg"
+                        d="M18 2.0845
+                        a 15.9155 15.9155 0 0 1 0 31.831
+                        a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path class="circle"
+                        stroke-dasharray="{score_pct}, 100"
+                        stroke="{circle_color}"
+                        d="M18 2.0845
+                        a 15.9155 15.9155 0 0 1 0 31.831
+                        a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <text x="18" y="20.35" class="percentage">{score_pct}%</text>
+                </svg>
+                <div class="match-label">MATCH</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
