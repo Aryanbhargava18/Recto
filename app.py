@@ -619,42 +619,7 @@ if df.empty:
 # ─────────────────────────────────────────────────────────────────────────────
 # HERO SECTION
 # ─────────────────────────────────────────────────────────────────────────────
-top_score = round(df['score'].max() * 100, 1)
-avg_score = round(df['score'].mean() * 100, 1)
-above_60 = int((df['score'] >= 0.6).sum())
-ir_heavy = int(df['ir_roles_count'].fillna(0).ge(2).sum()) if 'ir_roles_count' in df.columns else '—'
-
-st.markdown(f"""
-<div class="hero">
-    <div class="hero-title">Top 100 candidates, <span class="highlight">ranked.</span></div>
-    <div class="hero-subtitle">
-        Deterministic 5-layer pipeline scores 100K candidates in under 3 minutes.
-        Zero LLMs. Zero API calls. Pure heuristic engineering.
-    </div>
-    <div class="hero-metrics">
-        <div class="hero-metric">
-            <div class="hm-value amber">{len(df)}</div>
-            <div class="hm-label">Candidates Ranked</div>
-        </div>
-        <div class="hero-metric">
-            <div class="hm-value">{top_score}%</div>
-            <div class="hm-label">Top Match Score</div>
-        </div>
-        <div class="hero-metric">
-            <div class="hm-value">{avg_score}%</div>
-            <div class="hm-label">Average Score</div>
-        </div>
-        <div class="hero-metric">
-            <div class="hm-value">{above_60}</div>
-            <div class="hm-label">Score ≥ 60%</div>
-        </div>
-        <div class="hero-metric">
-            <div class="hm-value">{ir_heavy}</div>
-            <div class="hm-label">Deep IR (2+ roles)</div>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+hero_placeholder = st.empty()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTROLS
@@ -702,6 +667,44 @@ if high_resp:
 
 # Apply Top N filter last
 filtered = filtered.head(top_n)
+
+# Update Hero Metrics dynamically
+top_score = round(filtered['score'].max() * 100, 1) if not filtered.empty else 0.0
+avg_score = round(filtered['score'].mean() * 100, 1) if not filtered.empty else 0.0
+above_60 = int((filtered['score'] >= 0.6).sum())
+ir_heavy = int(filtered['ir_roles_count'].fillna(0).ge(2).sum()) if 'ir_roles_count' in filtered.columns else '—'
+
+hero_placeholder.markdown(f"""
+<div class="hero">
+    <div class="hero-title">Top 100 candidates, <span class="highlight">ranked.</span></div>
+    <div class="hero-subtitle">
+        Deterministic 5-layer pipeline scores 100K candidates in under 3 minutes.
+        Zero LLMs. Zero API calls. Pure heuristic engineering.
+    </div>
+    <div class="hero-metrics">
+        <div class="hero-metric">
+            <div class="hm-value amber">{len(filtered)}</div>
+            <div class="hm-label">Candidates Ranked</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{top_score}%</div>
+            <div class="hm-label">Top Match Score</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{avg_score}%</div>
+            <div class="hm-label">Average Score</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{above_60}</div>
+            <div class="hm-label">Score ≥ 60%</div>
+        </div>
+        <div class="hero-metric">
+            <div class="hm-value">{ir_heavy}</div>
+            <div class="hm-label">Deep IR (2+ roles)</div>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2-COLUMN: Candidates + Sidebar
