@@ -302,7 +302,7 @@ def generate_reports(output_dir="results"):
     final_csv_df = df.head(100).copy()
     # Normalize scores to a realistic confidence curve (e.g. 74% to 96%) using log transform
     import numpy as np
-    log_scores = np.log1p(final_csv_df['HYBRID_SCORE'])
+    log_scores = np.log1p(np.maximum(final_csv_df['HYBRID_SCORE'], 0))
     max_log = log_scores.max()
     min_log = log_scores.min()
     log_range = max(max_log - min_log, 1e-6)
