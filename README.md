@@ -184,6 +184,6 @@ Recto/
     └── recto_report.md      # Detailed analysis report
 ```
 
----
+ 
 
-**Built by Team Recto — Aryan Bhargava & Harshit Kudhial** ◈
+ 
